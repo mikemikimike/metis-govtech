@@ -347,7 +347,7 @@
       "type": "string"
     },
     "runner_factory_ref": {
-      "default": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+      "default": "metis.engine.simulation.runners.http.HttpRunnerFactory",
       "title": "Runner Factory Ref",
       "type": "string"
     },

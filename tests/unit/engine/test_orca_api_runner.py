@@ -15,7 +15,7 @@ from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunnerFactory,
 )
 from metis.engine.simulation.gen_1.runners.orca_api._fixtures import content_type_for
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.types import (
     ButtonClickAction,
     FormFillAction,
     UploadFileAction,
@@ -80,7 +80,7 @@ class TestOrcaApiRunnerFactory:
         from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
         cls = resolve_runner_factory(
-            "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+            "metis.engine.simulation.gen_1.runners.orca_api.OrcaApiRunnerFactory"
         )
         assert cls is OrcaApiRunnerFactory
 
@@ -210,7 +210,7 @@ async def test_collect_artifacts_emits_relative_path_and_skips_missing(
 async def test_send_turn_appends_submitted_fixtures_as_artifacts(
     tmp_path, monkeypatch
 ) -> None:
-    from metis.engine.simulation.types import Observation
+    from metis.engine.simulation.gen_1.types import Observation
 
     runner, fixtures_dir = _make_runner(tmp_path, fixtures=["q3.csv"])
     (fixtures_dir / "q3.csv").write_text("a,b\n1,2\n")
@@ -241,7 +241,7 @@ async def test_submitted_fixture_artifact_carries_the_file_id(
     tmp_path, monkeypatch
 ) -> None:
     """An uploaded fixture has an Orca fileId too; the cache already holds it."""
-    from metis.engine.simulation.types import Observation
+    from metis.engine.simulation.gen_1.types import Observation
 
     runner, fixtures_dir = _make_runner(tmp_path, fixtures=["q3.csv"])
     (fixtures_dir / "q3.csv").write_text("a,b\n1,2\n")
@@ -287,7 +287,7 @@ async def test_send_turn_appends_no_fixtures_when_none_submitted(
 ) -> None:
     # A turn that attached nothing (resolution failed → not in _attaching) must
     # surface no fixture artifact: no assumed uploads.
-    from metis.engine.simulation.types import Observation
+    from metis.engine.simulation.gen_1.types import Observation
 
     runner, _ = _make_runner(tmp_path, fixtures=["q3.csv"])
 

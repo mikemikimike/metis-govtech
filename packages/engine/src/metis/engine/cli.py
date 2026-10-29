@@ -687,7 +687,7 @@ def _run_simulation(
         redo_plan = trial_plan
         completed_records = {}
 
-    from metis.engine.simulation.gen_2.binding import TargetBindingError
+    from metis.engine.simulation.binding import TargetBindingError
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
     factory_cls = resolve_runner_factory(specification.runner_factory_ref)

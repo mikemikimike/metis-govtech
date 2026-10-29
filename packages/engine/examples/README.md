@@ -20,8 +20,8 @@ number tells apart different experiments with the same generation, transport, an
 |---|---|---|
 | [`gen_1-orca_api-1/`](gen_1-orca_api-1/specification.yaml) | The smallest complete experiment: one Persona, one Scenario, one Task, one Trial, and one Grader, with no uploaded files. The persona asks Orca a direct question, and `DemoTraceBudgetGrader` checks that the session used at most four traces (persona–target exchanges). The Task also shows the optional execution settings, including the separate turn limit and retry count. | `OrcaApiRunnerFactory` |
 | [`gen_1-orca_api-2/`](gen_1-orca_api-2/specification.yaml) | An experiment with a fixture file. The persona uploads `q3_sales.csv` and asks for an analysis with constraints, so the run exercises file upload and a longer session. One Behaviour, "Chart quality", is graded with `DemoTraceBudgetGrader`. | `OrcaApiRunnerFactory` |
-| [`gen_2-http-orca_api-1/`](gen_2-http-orca_api-1/specification.yaml) | The same question as `gen_1-orca_api-1`, run through the generic HTTP runner instead of a Python runner. [`orca-api.yaml`](gen_2-http-orca_api-1/orca-api.yaml) is a *target binding*: it tells the runner where Orca's OpenAPI document is, which calls are forbidden and how to authenticate, with no code. | `HttpRunnerFactory` |
-| [`gen_2-http-agentic_eval_toyapp-1/`](gen_2-http-agentic_eval_toyapp-1/specification.yaml) | The generic HTTP runner on a second app, with an experiment designed in the Wizard's Interview: three Tasks (a concise annual-leave answer, an expense question with missing details, and a question the policy collection cannot answer) put to the [agentic-eval toy app](https://github.com/govtech-responsibleai/agentic-eval-toyapp), and ten LLM-judged Criteria (`CriterionJudgeGrader`) across four Behaviours. It runs one Trial per Task so that a first run is quick. Its binding, [`toyapp-api.yaml`](gen_2-http-agentic_eval_toyapp-1/toyapp-api.yaml), has no auth and no advice: it names the app and where its OpenAPI document is. Start the app and set `TOYAPP_API_URL` (for example `http://127.0.0.1:8000`) first. | `HttpRunnerFactory` |
+| [`http-orca_api-1/`](http-orca_api-1/specification.yaml) | The same question as `gen_1-orca_api-1`, run through the generic HTTP runner instead of a Python runner. [`orca-api.yaml`](http-orca_api-1/orca-api.yaml) is a *target binding*: it tells the runner where Orca's OpenAPI document is, which calls are forbidden and how to authenticate, with no code. | `HttpRunnerFactory` |
+| [`http-agentic_eval_toyapp-1/`](http-agentic_eval_toyapp-1/specification.yaml) | The generic HTTP runner on a second app, with an experiment designed in the Wizard's Interview: three Tasks (a concise annual-leave answer, an expense question with missing details, and a question the policy collection cannot answer) put to the [agentic-eval toy app](https://github.com/govtech-responsibleai/agentic-eval-toyapp), and ten LLM-judged Criteria (`CriterionJudgeGrader`) across four Behaviours. It runs one Trial per Task so that a first run is quick. Its binding, [`toyapp-api.yaml`](http-agentic_eval_toyapp-1/toyapp-api.yaml), has no auth and no advice: it names the app and where its OpenAPI document is. Start the app and set `TOYAPP_API_URL` (for example `http://127.0.0.1:8000`) first. | `HttpRunnerFactory` |
 
 ## Structure
 
@@ -33,11 +33,11 @@ examples/
 ├── gen_1-orca_api-2/
 │   ├── specification.yaml
 │   └── fixtures/q3_sales.csv
-├── gen_2-http-orca_api-1/
+├── http-orca_api-1/
 │   ├── specification.yaml
 │   ├── orca-api.yaml          # the target binding, beside the specification
 │   └── fixtures/
-└── gen_2-http-agentic_eval_toyapp-1/
+└── http-agentic_eval_toyapp-1/
     ├── specification.yaml
     ├── toyapp-api.yaml
     └── fixtures/
@@ -68,7 +68,7 @@ the named output.
 
 ## Binding another API
 
-`gen_2-http-orca_api-1/` shows how an experiment uses a target binding. Its specification
+`http-orca_api-1/` shows how an experiment uses a target binding. Its specification
 names the generic HTTP runner and the binding file next to it:
 
 ```yaml
@@ -78,7 +78,7 @@ target_binding: orca-api.yaml
 
 The path is relative to the specification and must stay inside the experiment folder, so each
 experiment keeps its own copy of the binding. The
-[`gen_2` README](../src/metis/engine/simulation/gen_2/README.md) explains each field and how
+[`gen_2` README](../src/metis/engine/simulation/README.md) explains each field and how
 to write a binding for your own app. The runner has been tried on Orca's API only. The toy
 app example is its second target and has not been run yet.
 

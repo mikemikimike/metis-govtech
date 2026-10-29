@@ -47,9 +47,9 @@ if TYPE_CHECKING:
     from metis.wizard.domain.specification import Specification
 
 RUNNER_FACTORY_REFS: dict[ConnectionTransport, str] = {
-    ConnectionTransport.HTTP: "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory",
+    ConnectionTransport.HTTP: "metis.engine.simulation.runners.http.HttpRunnerFactory",
     ConnectionTransport.BROWSER: (
-        "metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory"
+        "metis.engine.simulation.runners.browser.BrowserRunnerFactory"
     ),
 }
 """The gen_2 runner factory for each transport, as FQN strings. The Wizard never imports them."""

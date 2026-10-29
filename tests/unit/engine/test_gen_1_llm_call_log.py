@@ -16,17 +16,15 @@ from metis.engine.simulation import model_settings as simulation_model_settings
 from metis.engine.simulation.experiment import TrialPlanItem, _worker, trial_folder_name
 from metis.engine.simulation.gen_1 import artifact_summarizer
 from metis.engine.simulation.gen_1 import trial as gen_1_trial
+from metis.engine.simulation.gen_1.runner import Runner
 from metis.engine.simulation.gen_1.trial import build_trial
-from metis.engine.simulation.llm_calls import LLMCallLog, LLMCallRecord
-from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
-    Artifact,
+from metis.engine.simulation.gen_1.types import (
     ChosenAction,
     Observation,
-    Persona,
-    Scenario,
     UserAgentOutput,
 )
+from metis.engine.simulation.llm_calls import LLMCallLog, LLMCallRecord
+from metis.engine.simulation.types import Artifact, Persona, Scenario
 
 
 class _FakeOpenAI:

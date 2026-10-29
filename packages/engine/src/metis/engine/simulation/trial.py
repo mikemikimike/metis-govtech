@@ -11,14 +11,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+from ._fixture_artifacts import build_fixture_artifacts
+from .artifacts import file_facts
 from .gen_1.trial import build_trial as build_gen_1_trial
 from .gen_1.trial import resolve_fixture_descriptions as gen_1_descriptions
-from .gen_2.trial import build_trial as build_gen_2_trial
-from .gen_2.trial import resolve_fixture_descriptions as gen_2_descriptions
+from .llm_calls import LLMCallLog
+from .model_settings import user_agent_settings
+from .orchestrator import Orchestrator
+from .user_agent.agent import UserAgent
 
 if TYPE_CHECKING:
     import threading
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Iterable
     from pathlib import Path
 
     from metis.core import Artifact
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .factory import RunnerFactory
+    from .runner import Runner
     from .types import Persona, Scenario
 
 
@@ -39,6 +44,72 @@ class Trial(Protocol):
     def partial_record(self, stop_reason: str) -> TrialRecord:
         """Build a record from whatever progress the trial has made."""
         ...
+
+
+def build_trial(
+    *,
+    runner: Runner,
+    persona: Persona,
+    scenario: Scenario,
+    trial_config: TrialConfig,
+    run_dir: Path,
+    fixtures_dir: Path,
+    experiment_root: Path,
+    fixture_artifacts: list[Artifact],
+    trial_index: int,
+    state: SimulationState | None,
+    tui_ctx: TUIContext | None,
+    shutdown_event: threading.Event | None,
+) -> Orchestrator:
+    """Build the user agent and the orchestrator that drives ``runner`` for one attempt.
+
+    ``fixtures_dir`` is part of the seam's signature but unused here: the fixtures arrive
+    as ``fixture_artifacts``, already located.
+    """
+    del fixtures_dir
+    agent = UserAgent(
+        persona=persona,
+        scenario=scenario,
+        llm_log=LLMCallLog.for_trial(run_dir),
+        settings=user_agent_settings(trial_config.user_agent_model),
+    )
+    return Orchestrator(
+        runner=runner,
+        agent=agent,
+        trial_config=trial_config,
+        scenario=scenario,
+        run_dir=run_dir,
+        experiment_root=experiment_root,
+        fixture_artifacts=fixture_artifacts,
+        trial_index=trial_index,
+        state=state,
+        tui_ctx=tui_ctx,
+        shutdown_event=shutdown_event,
+    )
+
+
+async def resolve_fixture_descriptions(
+    fixture_names: Iterable[str],
+    fixtures_dir: Path,
+    experiment_root: Path,
+    author_descriptions: dict[str, str],
+    *,
+    user_agent_model: str | None = None,
+) -> dict[str, str]:
+    """One description per distinct fixture: the author's, else its file facts.
+
+    No LLM is called, so ``user_agent_model`` is not used. A fixture missing on disk is
+    left out.
+    """
+    del user_agent_model
+    artifacts = build_fixture_artifacts(
+        sorted(set(fixture_names)), fixtures_dir, experiment_root, author_descriptions
+    )
+    root = experiment_root.resolve()
+    return {
+        a.name: a.content_description or file_facts(root / str(a.path), a.name)
+        for a in artifacts
+    }
 
 
 @dataclass(frozen=True)
@@ -62,8 +133,8 @@ _GENERATIONS: dict[str, SimulatorGeneration] = {
         resolve_fixture_descriptions=gen_1_descriptions,
     ),
     "gen_2": SimulatorGeneration(
-        build_trial=build_gen_2_trial,
-        resolve_fixture_descriptions=gen_2_descriptions,
+        build_trial=build_trial,
+        resolve_fixture_descriptions=resolve_fixture_descriptions,
         has_runner_agent=True,
     ),
 }

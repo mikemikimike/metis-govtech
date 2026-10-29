@@ -9,14 +9,13 @@ import pytest
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.gen_1 import orchestrator as orch_module
 from metis.engine.simulation.gen_1.orchestrator import Orchestrator
-from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
-    Artifact,
+from metis.engine.simulation.gen_1.runner import Runner
+from metis.engine.simulation.gen_1.types import (
     ChosenAction,
     Observation,
-    Scenario,
     UserAgentOutput,
 )
+from metis.engine.simulation.types import Artifact, Scenario
 
 
 class _FakeRunner(Runner):

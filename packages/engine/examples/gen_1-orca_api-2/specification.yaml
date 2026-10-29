@@ -1,6 +1,6 @@
 schema_version: 1
 id: orca-simple2
-runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+runner_factory_ref: metis.engine.simulation.gen_1.runners.orca_api.OrcaApiRunnerFactory
 target:
   name: Orca
   users: Programme managers, senior directors, and domain specialists.

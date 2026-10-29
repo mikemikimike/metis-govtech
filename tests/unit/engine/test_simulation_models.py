@@ -19,7 +19,7 @@ from tests.unit.engine.test_cli_evaluate import GRADERS, _spec_with
 from tests.unit.engine.test_cli_simulate import MINIMAL_EXPERIMENT
 
 runner = CliRunner()
-_HTTP_REF = "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory"
+_HTTP_REF = "metis.engine.simulation.runners.http.HttpRunnerFactory"
 
 
 def test_a_task_model_reaches_the_trial_and_the_trial_records_its_models(

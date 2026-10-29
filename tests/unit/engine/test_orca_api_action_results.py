@@ -12,7 +12,7 @@ from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunner,
     OrcaApiRunnerConfig,
 )
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.types import (
     ButtonClickAction,
     FormFillAction,
     Observation,

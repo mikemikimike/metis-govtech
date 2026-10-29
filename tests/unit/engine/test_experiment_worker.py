@@ -16,9 +16,15 @@ from metis.engine.simulation.experiment import (
     _worker,
     trial_folder_name,
 )
-from metis.engine.simulation.gen_2.runner import Runner
-from metis.engine.simulation.gen_2.types import Observation, Promise, Reading
-from metis.engine.simulation.types import Persona, Scenario, Specification
+from metis.engine.simulation.runner import Runner
+from metis.engine.simulation.types import (
+    Observation,
+    Persona,
+    Promise,
+    Reading,
+    Scenario,
+    Specification,
+)
 
 
 class MockRunner(Runner):
@@ -74,7 +80,7 @@ class MockRunnerFactory:
 @pytest.fixture(autouse=True)
 def stub_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "metis.engine.simulation.gen_2.trial.UserAgent", lambda **kwargs: object()
+        "metis.engine.simulation.trial.UserAgent", lambda **kwargs: object()
     )
 
 
@@ -128,7 +134,7 @@ class TestWorkerWithMockFactory:
 
         canned = _make_canned_record(simple_scenario, simple_persona)
 
-        with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+        with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
             mock_orch_instance = AsyncMock()
             mock_orch_instance.execute = AsyncMock(return_value=canned)
             mock_orch_cls.return_value = mock_orch_instance
@@ -166,7 +172,7 @@ class TestWorkerWithMockFactory:
 
         canned = _make_canned_record(simple_scenario, simple_persona)
 
-        with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+        with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
             mock_orch_instance = AsyncMock()
             mock_orch_instance.execute = AsyncMock(return_value=canned)
             mock_orch_cls.return_value = mock_orch_instance
@@ -250,7 +256,7 @@ class TestWorkerUnexpectedCrash:
             scenario, simple_persona, turns=3, stop_reason="system_error"
         )
 
-        with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+        with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
             instance.execute = AsyncMock(side_effect=RuntimeError())  # message-less
             instance.partial_record = MagicMock(return_value=partial)
@@ -299,7 +305,7 @@ class TestWorkerUnexpectedCrash:
             scenario, simple_persona, turns=2, stop_reason="system_error"
         )
 
-        with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+        with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
             instance.execute = AsyncMock(side_effect=[RuntimeError(), success])
             instance.partial_record = MagicMock(return_value=partial)
@@ -344,7 +350,7 @@ class TestWorkerUnexpectedCrash:
         await factory.start()
 
         with patch(
-            "metis.engine.simulation.gen_2.trial.Orchestrator",
+            "metis.engine.simulation.trial.Orchestrator",
             side_effect=RuntimeError("construction blew up"),
         ):
             records = await _worker(
@@ -386,7 +392,7 @@ class TestWorkerUnexpectedCrash:
         )
 
         with (
-            patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls,
+            patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls,
             patch("metis.engine.simulation.experiment.logger") as mock_logger,
         ):
             instance = AsyncMock()
@@ -431,7 +437,7 @@ class TestWorkerUnexpectedCrash:
             scenario, simple_persona, turns=3, stop_reason="system_error"
         )
 
-        with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+        with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
             instance.execute = AsyncMock(
                 side_effect=ConsecutiveFailureEscalation("too many failures")
@@ -466,7 +472,7 @@ class TestFixtureContentDescriptions:
                 "schema_version": 1,
                 "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
                 "id": "e",
-                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "runner_factory_ref": "metis.engine.simulation.runners.http.HttpRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
                 "target": {
@@ -517,7 +523,7 @@ class TestFixtureContentDescriptions:
             {
                 "schema_version": 1,
                 "id": "e",
-                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "runner_factory_ref": "metis.engine.simulation.runners.http.HttpRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
                 "target": {
@@ -623,7 +629,7 @@ class TestFixtureContentDescriptions:
             {
                 "schema_version": 1,
                 "id": "e",
-                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "runner_factory_ref": "metis.engine.simulation.runners.http.HttpRunnerFactory",
                 "personas": [
                     {"id": "p1", "description": "d", "name": "p1"},
                     {"id": "p2", "description": "d", "name": "p2"},
@@ -716,7 +722,7 @@ class TestFixtureContentDescriptions:
 
 @pytest.mark.asyncio
 async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
-    import metis.engine.simulation.gen_2.trial as exp_mod
+    import metis.engine.simulation.trial as exp_mod
     from metis.core import Artifact
     from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
     from metis.engine.simulation.experiment import _worker
@@ -795,7 +801,7 @@ async def test_worker_factory_create_receives_experiment_root(
     factory = RecordingFactory()
     await factory.start()
 
-    with patch("metis.engine.simulation.gen_2.trial.Orchestrator") as mock_orch_cls:
+    with patch("metis.engine.simulation.trial.Orchestrator") as mock_orch_cls:
         mock_orch_instance = AsyncMock()
         mock_orch_instance.execute = AsyncMock(return_value=canned)
         mock_orch_cls.return_value = mock_orch_instance
@@ -823,7 +829,7 @@ class TestAttemptScopedArtifacts:
     async def test_retry_moves_the_failed_attempt_artifacts_aside(
         self, simple_persona: Persona, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import metis.engine.simulation.gen_2.trial as exp_mod
+        import metis.engine.simulation.trial as exp_mod
 
         scenario = Scenario(
             id="test-scenario",
@@ -904,7 +910,7 @@ class TestAttemptScopedArtifacts:
         though an earlier process already spent attempts on it. The previous
         process's downloads are moved aside rather than written over.
         """
-        import metis.engine.simulation.gen_2.trial as exp_mod
+        import metis.engine.simulation.trial as exp_mod
 
         scenario = Scenario(
             id="test-scenario",
@@ -1035,9 +1041,7 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         )
         return MagicMock(execute=AsyncMock(return_value=record))
 
-    with patch(
-        "metis.engine.simulation.gen_2.trial.Orchestrator", side_effect=orchestrator
-    ):
+    with patch("metis.engine.simulation.trial.Orchestrator", side_effect=orchestrator):
         records = await _worker(
             worker_id=0,
             runner_factory=factory,
@@ -1075,9 +1079,7 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
     from metis.engine.simulation.experiment import expand_trial_plan
 
     document = Specification.load_file(
-        Path(
-            "packages/engine/examples/gen_2-http-agentic_eval_toyapp-1/specification.yaml"
-        )
+        Path("packages/engine/examples/http-agentic_eval_toyapp-1/specification.yaml")
     ).model_dump()
     task = document["tasks"][0]
     task.update(
@@ -1101,7 +1103,7 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
             return None
 
     monkeypatch.setattr(
-        "metis.engine.simulation.gen_2.trial.Orchestrator", FailingOrchestrator
+        "metis.engine.simulation.trial.Orchestrator", FailingOrchestrator
     )
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()

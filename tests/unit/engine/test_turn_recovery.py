@@ -7,16 +7,16 @@ import pytest
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.gen_1.orchestrator import Orchestrator
-from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.runner import Runner
+from metis.engine.simulation.gen_1.types import (
     ActionResult,
     ButtonClickAction,
     ChosenAction,
     Observation,
-    Scenario,
     UserAgentInput,
     UserAgentOutput,
 )
+from metis.engine.simulation.types import Scenario
 
 
 class TestRecoverPage:
@@ -104,7 +104,7 @@ class TestUndeliveredObservation:
 
     def test_one_failed_row_per_submitted_action(self) -> None:
         from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
-        from metis.engine.simulation.types import (
+        from metis.engine.simulation.gen_1.types import (
             ButtonClickAction,
             UploadFileAction,
         )
@@ -125,7 +125,7 @@ class TestUndeliveredObservation:
 
     def test_retryable_is_none_because_the_caller_observed_nothing(self) -> None:
         from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
-        from metis.engine.simulation.types import ButtonClickAction
+        from metis.engine.simulation.gen_1.types import ButtonClickAction
 
         obs = _undelivered_observation(
             [ButtonClickAction(slot_id="b")], "gone", delivered=False
@@ -157,7 +157,7 @@ class TestUndeliveredObservation:
 
     def test_no_row_is_withheld_because_the_persona_did_nothing_wrong(self) -> None:
         from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
-        from metis.engine.simulation.types import ButtonClickAction
+        from metis.engine.simulation.gen_1.types import ButtonClickAction
 
         obs = _undelivered_observation(
             [ButtonClickAction(slot_id="b")], "gone", delivered=False

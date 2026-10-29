@@ -17,12 +17,6 @@ REPO = Path(__file__).parents[3]
 SRC_ROOTS = [*REPO.glob("packages/*/src"), *REPO.glob("apps/*/src")]
 GEN_1 = "metis.engine.simulation.gen_1"
 ALLOWED = {  # module importing gen_1 → gen_1 modules it may import
-    "metis.engine.simulation.runner": {f"{GEN_1}.runner"},
-    "metis.engine.simulation.types": {f"{GEN_1}.types"},
-    "metis.engine.simulation.runners.orca_api": {f"{GEN_1}.runners.orca_api"},
-    "metis.engine.simulation.runners.orca_playwright": {
-        f"{GEN_1}.runners.orca_playwright"
-    },
     "metis.engine.simulation.trial": {f"{GEN_1}.trial"},
 }
 

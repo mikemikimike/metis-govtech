@@ -6,6 +6,13 @@ from pathlib import Path
 
 import pytest
 
+from metis.engine.simulation.gen_1.types import (
+    ActionResult,
+    ActionSlot,
+    Observation,
+    UserAgentInput,
+    UserAgentOutput,
+)
 from metis.engine.simulation.gen_1.user_agent.agent import (
     UserAgent,
     _render_artifacts,
@@ -15,16 +22,7 @@ from metis.engine.simulation.gen_1.user_agent.agent import (
 )
 from metis.engine.simulation.gen_1.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
 from metis.engine.simulation.llm_calls import LLMCallLog
-from metis.engine.simulation.types import (
-    ActionResult,
-    ActionSlot,
-    Artifact,
-    Observation,
-    Persona,
-    Scenario,
-    UserAgentInput,
-    UserAgentOutput,
-)
+from metis.engine.simulation.types import Artifact, Persona, Scenario
 
 # Never written: these tests stub or skip the LLM call.
 _UNUSED_LOG = LLMCallLog(Path("unused-llm_calls.jsonl"))
@@ -264,7 +262,7 @@ def test_render_artifacts_shows_name_and_descriptions_not_uri() -> None:
 
 
 def test_agent_registry_accumulates_across_turns() -> None:
-    from metis.engine.simulation.types import Observation
+    from metis.engine.simulation.gen_1.types import Observation
 
     agent = UserAgent(
         persona=Persona(id="p", name="p", description="a user"),
@@ -318,7 +316,8 @@ def test_response_turn_prompt_has_artifacts_placeholder() -> None:
 
 
 def test_turn_prompt_surfaces_described_artifact_307() -> None:
-    from metis.engine.simulation.types import Artifact, Observation
+    from metis.engine.simulation.gen_1.types import Observation
+    from metis.engine.simulation.types import Artifact
 
     agent = UserAgent(
         persona=Persona(id="p", name="p", description="a domain expert"),
@@ -525,7 +524,7 @@ class TestRegistryKeysOnIdentity:
 
     def test_a_successful_retry_replaces_the_earlier_failure(self) -> None:
         """Turn 3 fails, turn 4 succeeds: one entry, holding the file."""
-        from metis.engine.simulation.types import Observation
+        from metis.engine.simulation.gen_1.types import Observation
 
         agent = self._agent()
         failed = Artifact(
@@ -557,7 +556,7 @@ class TestRegistryKeysOnIdentity:
         Same rule :func:`reconcile_by_identity` applies within a turn: a record
         with no ``path`` loses to one that has a file, whichever arrives last.
         """
-        from metis.engine.simulation.types import Observation
+        from metis.engine.simulation.gen_1.types import Observation
 
         agent = self._agent()
         received = Artifact(
@@ -588,7 +587,7 @@ class TestRegistryKeysOnIdentity:
         mistaken that for an already-received file and refused the update;
         the current guard (``held.state == "received"``) does not.
         """
-        from metis.engine.simulation.types import Observation
+        from metis.engine.simulation.gen_1.types import Observation
 
         agent = self._agent()
         held = Artifact(
@@ -613,7 +612,7 @@ class TestRegistryKeysOnIdentity:
         persona's own input as something the assistant produced — under a
         header promising the list is every file it received.
         """
-        from metis.engine.simulation.types import Observation
+        from metis.engine.simulation.gen_1.types import Observation
 
         agent = self._agent()
         uploaded = Artifact(
@@ -648,7 +647,7 @@ class TestRegistryKeysOnIdentity:
         target's side leaves the registry no identity to reconcile, which is
         why the delivered header states absence rather than a count.
         """
-        from metis.engine.simulation.types import Observation
+        from metis.engine.simulation.gen_1.types import Observation
 
         agent = self._agent()
         first = Artifact(

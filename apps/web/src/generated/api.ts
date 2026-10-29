@@ -946,7 +946,7 @@ export interface components {
             id: string;
             /**
              * Runner Factory Ref
-             * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+             * @default metis.engine.simulation.runners.http.HttpRunnerFactory
              */
             runner_factory_ref: string;
             /** Target Binding */
@@ -1870,7 +1870,7 @@ export interface components {
             id: string;
             /**
              * Runner Factory Ref
-             * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+             * @default metis.engine.simulation.runners.http.HttpRunnerFactory
              */
             runner_factory_ref: string;
             /** Target Binding */

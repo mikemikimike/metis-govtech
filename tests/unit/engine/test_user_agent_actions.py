@@ -6,7 +6,7 @@ import pytest
 from openai.lib._pydantic import to_strict_json_schema
 from pydantic import ValidationError
 
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.types import (
     ButtonClickAction,
     FormFillAction,
     UploadFileAction,

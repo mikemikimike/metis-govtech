@@ -6,8 +6,7 @@ import { specificationHasCriteria } from "./graders.ts";
 const specification: Specification = {
   schema_version: 1,
   id: "test",
-  runner_factory_ref:
-    "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+  runner_factory_ref: "metis.engine.simulation.runners.http.HttpRunnerFactory",
   tasks: [],
   target: { name: "", users: "", description: "", detail: "" },
   features: [

@@ -34,7 +34,7 @@ from metis.engine.simulation.gen_1.runners.orca_api._config import (
     ENV_PLATFORM_AI_KEY,
     PLATFORM_AI_KEY_HEADER,
 )
-from metis.engine.simulation.types import Observation
+from metis.engine.simulation.gen_1.types import Observation
 
 _PLATFORM_KEY = "platform-key-abcdef"
 
@@ -537,7 +537,7 @@ class TestEmptyMessage:
             "stepId": "step-1",
             "fields": [{"id": "q1", "type": "text", "label": "Q1"}],
         }
-        from metis.engine.simulation.types import FormFillAction
+        from metis.engine.simulation.gen_1.types import FormFillAction
 
         body = await runner._build_submit_body(
             "", [FormFillAction(slot_id="q1", value="answer")]
@@ -551,7 +551,7 @@ class TestEmptyMessage:
     ) -> None:
         """The turn-level delivered=False must not disturb a sibling action's
         own failure detail — the two channels have different owners (I1 vs I5)."""
-        from metis.engine.simulation.types import ButtonClickAction
+        from metis.engine.simulation.gen_1.types import ButtonClickAction
 
         runner = _make_runner(tmp_path)
         actions = [ButtonClickAction(slot_id="invented")]
@@ -579,7 +579,7 @@ class TestEmptyMessage:
 
         monkeypatch.setattr(runner._fixture_library, "file_id", spy)
 
-        from metis.engine.simulation.types import UploadFileAction
+        from metis.engine.simulation.gen_1.types import UploadFileAction
 
         result = await runner._build_submit_body(
             "", [UploadFileAction(slot_id="sales.csv", filename="sales.csv")]
@@ -604,7 +604,7 @@ class TestFormAnswerFailureFallsBackToMessage:
     async def test_a_mistyped_answer_does_not_abandon_the_turn(
         self, tmp_path: Path
     ) -> None:
-        from metis.engine.simulation.types import FormFillAction
+        from metis.engine.simulation.gen_1.types import FormFillAction
 
         runner = _make_runner(tmp_path)
         runner._pending_form = {
@@ -623,7 +623,7 @@ class TestFormAnswerFailureFallsBackToMessage:
     ) -> None:
         """Whether Orca accepts a partial formAnswers is not documented, so
         the runner never risks it: any problem discards the whole dict."""
-        from metis.engine.simulation.types import FormFillAction
+        from metis.engine.simulation.gen_1.types import FormFillAction
 
         runner = _make_runner(tmp_path)
         runner._pending_form = {

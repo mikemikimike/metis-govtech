@@ -11,7 +11,7 @@ from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import app
 from metis.engine.simulation import experiment as experiment_module
-from metis.engine.simulation.gen_2.binding import TargetBindingError
+from metis.engine.simulation.binding import TargetBindingError
 from tests.unit.engine.test_runner_ref import StubRunnerFactory
 
 runner = CliRunner()

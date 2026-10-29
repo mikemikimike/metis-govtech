@@ -6,7 +6,7 @@ import pytest
 
 from metis.engine.simulation.exceptions import RunnerContractError
 from metis.engine.simulation.gen_1._contract import validate_action_results
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.types import (
     ActionResult,
     ButtonClickAction,
     ChosenAction,
@@ -157,7 +157,7 @@ class TestWithholdUnstagedUploads:
 
     def test_a_declared_but_absent_fixture_says_not_found(self) -> None:
         from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
-        from metis.engine.simulation.types import UploadFileAction
+        from metis.engine.simulation.gen_1.types import UploadFileAction
 
         _, withheld = withhold_unstaged_uploads(
             [UploadFileAction(slot_id="s", filename="missing.csv")],
@@ -168,7 +168,7 @@ class TestWithholdUnstagedUploads:
 
     def test_an_undeclared_name_says_not_a_fixture_for_this_scenario(self) -> None:
         from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
-        from metis.engine.simulation.types import UploadFileAction
+        from metis.engine.simulation.gen_1.types import UploadFileAction
 
         _, withheld = withhold_unstaged_uploads(
             [UploadFileAction(slot_id="s", filename="invented.csv")],
@@ -179,7 +179,7 @@ class TestWithholdUnstagedUploads:
 
     def test_a_staged_upload_is_forwarded_untouched(self) -> None:
         from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
-        from metis.engine.simulation.types import UploadFileAction
+        from metis.engine.simulation.gen_1.types import UploadFileAction
 
         action = UploadFileAction(slot_id="s", filename="sales.csv")
         forwarded, withheld = withhold_unstaged_uploads(
@@ -190,7 +190,10 @@ class TestWithholdUnstagedUploads:
 
     def test_non_upload_actions_are_never_withheld(self) -> None:
         from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
-        from metis.engine.simulation.types import ButtonClickAction, FormFillAction
+        from metis.engine.simulation.gen_1.types import (
+            ButtonClickAction,
+            FormFillAction,
+        )
 
         actions = [
             ButtonClickAction(slot_id="b"),
@@ -202,7 +205,7 @@ class TestWithholdUnstagedUploads:
 
     def test_a_withheld_row_keeps_its_original_index_and_order_survives(self) -> None:
         from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
-        from metis.engine.simulation.types import (
+        from metis.engine.simulation.gen_1.types import (
             ButtonClickAction,
             FormFillAction,
             UploadFileAction,
@@ -301,7 +304,10 @@ class TestTheWholePipeline:
             validate_action_results,
             withhold_unstaged_uploads,
         )
-        from metis.engine.simulation.types import ButtonClickAction, UploadFileAction
+        from metis.engine.simulation.gen_1.types import (
+            ButtonClickAction,
+            UploadFileAction,
+        )
 
         actions = [
             UploadFileAction(slot_id="s0", filename="invented.csv"),
@@ -330,7 +336,10 @@ class _UploadingAgent:
         self.payloads: list[UserAgentInput] = []
 
     async def generate_opening(self):
-        from metis.engine.simulation.types import UploadFileAction, UserAgentOutput
+        from metis.engine.simulation.gen_1.types import (
+            UploadFileAction,
+            UserAgentOutput,
+        )
 
         return UserAgentOutput(
             message="hello",
@@ -339,7 +348,7 @@ class _UploadingAgent:
         )
 
     async def generate_response(self, payload: UserAgentInput):
-        from metis.engine.simulation.types import UserAgentOutput
+        from metis.engine.simulation.gen_1.types import UserAgentOutput
 
         self.payloads.append(payload)
         return UserAgentOutput(message="bye", decision="giving_up")

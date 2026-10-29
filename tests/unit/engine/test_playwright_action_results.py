@@ -14,7 +14,7 @@ pytest.importorskip("playwright")
 
 from metis.engine.simulation.gen_1.runners import orca_playwright
 from metis.engine.simulation.gen_1.runners.orca_playwright import OrcaPlaywrightRunner
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.types import (
     ButtonClickAction,
     FormFillAction,
     UIState,

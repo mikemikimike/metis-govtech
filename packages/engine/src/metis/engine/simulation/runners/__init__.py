@@ -1,1 +1,1 @@
-"""Runner implementations for different transport layers."""
+"""gen_2's runners."""

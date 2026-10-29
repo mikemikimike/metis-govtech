@@ -18,7 +18,6 @@ from metis.engine.simulation.experiment import (
     _execute_experiment_async,
     _worker,
 )
-from metis.engine.simulation.gen_2 import trial as gen_2_trial
 from metis.engine.simulation.llm_calls import LLMCallLog
 from metis.engine.simulation.model_settings import user_agent_settings
 from metis.engine.simulation.trial import create_trial
@@ -117,7 +116,7 @@ async def _run_worker(
     )
 
 
-def test_a_gen_2_factory_gets_a_gen_2_trial(
+def test_a_factory_gets_a_trial(
     monkeypatch: pytest.MonkeyPatch,
     persona: Persona,
     scenario: Scenario,
@@ -133,8 +132,8 @@ def test_a_gen_2_factory_gets_a_gen_2_trial(
         built["orch"] = kwargs
         return "orch"
 
-    monkeypatch.setattr(gen_2_trial, "UserAgent", fake_agent)
-    monkeypatch.setattr(gen_2_trial, "Orchestrator", fake_orchestrator)
+    monkeypatch.setattr(seam, "UserAgent", fake_agent)
+    monkeypatch.setattr(seam, "Orchestrator", fake_orchestrator)
 
     trial = create_trial(_Factory(), **_trial_kwargs(persona, scenario, tmp_path))
 
@@ -180,8 +179,8 @@ def test_generation_is_read_from_the_factory_class(
 ) -> None:
     # An instance attribute is not a declaration: the seam reads the class, so a
     # mock factory that answers any attribute name cannot pick a generation.
-    monkeypatch.setattr(gen_2_trial, "UserAgent", lambda **_kw: "agent")
-    monkeypatch.setattr(gen_2_trial, "Orchestrator", lambda **_kw: "orch")
+    monkeypatch.setattr(seam, "UserAgent", lambda **_kw: "agent")
+    monkeypatch.setattr(seam, "Orchestrator", lambda **_kw: "orch")
     factory = _Factory()
     factory.generation = "gen_9"
 
@@ -211,7 +210,7 @@ async def test_trial_construction_failure_retries_with_empty_record(
     def boom(**_kwargs: Any) -> None:
         raise RuntimeError("bad persona")
 
-    monkeypatch.setattr(gen_2_trial, "UserAgent", boom)
+    monkeypatch.setattr(seam, "UserAgent", boom)
     factory = _Factory()
 
     [record] = await _run_worker(

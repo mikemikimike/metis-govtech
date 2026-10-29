@@ -16,9 +16,9 @@ from metis.core import Artifact, resolve_artifact_path
 from metis.core.reporting import EvaluationResults
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine import cli
-from metis.engine.simulation.gen_2 import trial as gen_2_trial
-from metis.engine.simulation.gen_2.runner import Runner
-from metis.engine.simulation.gen_2.types import (
+from metis.engine.simulation import trial as trial_module
+from metis.engine.simulation.runner import Runner
+from metis.engine.simulation.types import (
     Observation,
     Promise,
     Reading,
@@ -141,7 +141,7 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
     monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path)
     (tmp_path / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
     monkeypatch.setenv("METIS_ENV_FILE", str(tmp_path / ".env"))
-    monkeypatch.setattr(gen_2_trial, "UserAgent", ScriptedUser)
+    monkeypatch.setattr(trial_module, "UserAgent", ScriptedUser)
     _patch_evaluation(monkeypatch, traces=1)
     runner = CliRunner()
     simulation = runner.invoke(

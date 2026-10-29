@@ -9,13 +9,13 @@ import pytest
 from metis.core import Artifact
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.gen_1.orchestrator import Orchestrator
-from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
+from metis.engine.simulation.gen_1.runner import Runner
+from metis.engine.simulation.gen_1.types import (
     ChosenAction,
     Observation,
-    Scenario,
     UserAgentOutput,
 )
+from metis.engine.simulation.types import Scenario
 
 
 class _NoArtifactRunner(Runner):

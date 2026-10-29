@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from metis.engine.simulation.types import ActionResult, Observation
+from metis.engine.simulation.gen_1.types import ActionResult, Observation
 
 
 class TestActionResultVerdict:
