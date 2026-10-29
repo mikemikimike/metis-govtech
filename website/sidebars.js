@@ -32,7 +32,12 @@ const sidebars = {
       collapsed: false,
       items: ['run-test-suite', 'run-graders'],
     },
-    {type: 'doc', id: 'report', label: 'Analyse your results'},
+    {
+      type: 'category',
+      label: 'Analyse your results',
+      collapsed: false,
+      items: ['report'],
+    },
     {type: 'doc', id: 'library', label: 'View our graders'},
     {type: 'html', value: '<hr class="sidebar-divider" aria-hidden="true" />'},
     {type: 'doc', id: 'examples', label: 'Examples'},
