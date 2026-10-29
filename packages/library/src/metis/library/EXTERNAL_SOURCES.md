@@ -23,7 +23,8 @@ The module paths are relative to `metis/library/graders/`.
   `execution_and_decision_quality/_tool_argument_correctness.py`,
   `execution_and_decision_quality/_tool_choice_appropriateness.py`,
   `interaction_quality/_communication_clarity.py`,
-  `interaction_quality/_user_correction_support.py`
+  `interaction_quality/_user_correction_support.py`,
+  `reliability_and_robustness/_robustness_to_tool_failures.py`
 
 ### Braintrust Autoevals (braintrustdata/autoevals)
 

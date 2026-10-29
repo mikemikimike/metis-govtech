@@ -61,6 +61,14 @@ for METIS.
 | `ToneAppropriatenessGrader` | METIS |
 | `OutputNaturalnessGrader` | METIS |
 
+## Reliability and Robustness
+
+| Grader | Adapted from |
+|---|---|
+| `RobustnessToToolFailuresGrader` | [Phoenix tool_response_handling](https://github.com/Arize-ai/phoenix/blob/d5f5e054756e98d05172a1651c6ffa3fc6f2ff27/js/packages/phoenix-evals/src/__generated__/default_templates/TOOL_RESPONSE_HANDLING_CLASSIFICATION_EVALUATOR_CONFIG.ts), for the error-handling rules only |
+| `LongTaskPerformanceStabilityGrader` | METIS |
+| `RobustnessToContextDegradationGrader` | METIS |
+
 ## Fallback judge
 
 `CriterionJudgeGrader` has no measure. It uses the criterion description as its rubric. The

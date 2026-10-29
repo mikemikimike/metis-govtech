@@ -322,6 +322,29 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
   `metis/library/graders/README.md` lists the nine graders under Interaction Quality (#451).
 
+- Three Reliability and Robustness graders, one for each attribute that one recorded
+  session can show:
+  - `RobustnessToToolFailuresGrader` judges whether the agent still reaches the required
+    result or an acceptable fallback when a tool response is malformed, missing, delayed, or
+    erroneous. The judge sees each tool call's recorded status and its result text. By
+    default it gives one result for each recorded turn that has a tool call, and `scope: session` gives
+    one result for the session. A session with no tool calls is errored. The optional
+    `acceptable_fallbacks` setting lists the fallbacks that count. Its prompt adapts the
+    error-handling rules of the Arize Phoenix `tool_response_handling` prompt.
+  - `LongTaskPerformanceStabilityGrader` judges the whole session in one call and checks
+    whether the later recorded turns are worse than the earlier ones: lost progress, dropped
+    instructions, or contradictions of earlier turns. A session with fewer than `min_turns`
+    recorded turns (default 4) is errored.
+  - `RobustnessToContextDegradationGrader` judges whether a reply still uses the evidence it
+    needs when the context is long, noisy, incomplete, or stale, and whether it asks or
+    abstains when indispensable evidence is missing. By default it gives one result for each
+    recorded turn, judged with the recorded turns before it, and it also takes `scope: session`. The optional
+    `degradation` setting tells the judge what makes the context harder and where the needed
+    evidence is.
+
+  `metis/library/graders/README.md` lists the three graders under Reliability and Robustness
+  (#450).
+
 - Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
   subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`
   (the `binary` instructions and reply model), and `AGGREGATION_DEFINITIONS` in

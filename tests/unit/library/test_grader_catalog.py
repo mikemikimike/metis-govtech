@@ -51,10 +51,16 @@ INTERACTION_QUALITY = {
     "ToneAppropriatenessGrader",
     "UserCorrectionSupportGrader",
 }
+RELIABILITY_AND_ROBUSTNESS = {
+    "LongTaskPerformanceStabilityGrader",
+    "RobustnessToContextDegradationGrader",
+    "RobustnessToToolFailuresGrader",
+}
 EXPECTED = (
     {"CriterionJudgeGrader"}
     | EXECUTION_AND_DECISION_QUALITY
     | INTERACTION_QUALITY
+    | RELIABILITY_AND_ROBUSTNESS
     | TASK_AND_OUTPUT_QUALITY
 )
 
