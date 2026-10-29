@@ -42,11 +42,11 @@ const wizMsgs: WizMsg[] = [
 ];
 
 const specLines = [
-  'target:', '  name: Target AI Agent', 'feature:',
-  '  name: Enterprise Search and Knowledge Retrieval', 'behaviour:',
-  '  name: Find and use enterprise information', 'criteria:',
-  '  - Factual Accuracy', '  - Evidence Source Suitability',
-  '  - Claim Support by Evidence', '  - Appropriate Handling of Capability Limits',
+  'target:', '  name: Enterprise AI Assistant', '',
+  'features:', '  - name: Enterprise Search and Knowledge Retrieval',
+  '    behaviours:', '      - name: Find and use enterprise information',
+  '        criteria:', '          - Factual Accuracy', '          - Evidence Source Suitability',
+  '          - Claim Support by Evidence', '          - Appropriate Handling of Capability Limits', '',
   'personas:', '  - collaborative knowledge worker',
   '  - focused questioner', '  - policy seeker',
   'scenarios:', '  - Draft a reply using a past event record',
