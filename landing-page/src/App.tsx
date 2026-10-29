@@ -123,9 +123,9 @@ const graphNodes: GraphNode[] = [
   { id: 'policy', label: 'check_policy', kind: 'tool', icon: 'shield', col: 4, y: 104 },
   { id: 'reply', label: 'Reply', kind: 'output', icon: 'send', col: 5, y: 80 },
 ];
-/* Pill width from the label length: 11px Inter for plain words, 10px mono for code names. */
+/* Pill width from the label length: 12px Inter for plain words, 12px mono for code names. */
 const gSans = (nd: GraphNode) => nd.kind === 'persona' || nd.kind === 'output';
-const gw = (nd: GraphNode) => Math.round(32 + nd.label.length * (gSans(nd) ? 6.2 : 6.05));
+const gw = (nd: GraphNode) => Math.round(32 + nd.label.length * (gSans(nd) ? 6.8 : 7.25));
 /* Columns spread across the full width, with equal gaps between the widest pill of each column. */
 const gColW = graphNodes.reduce<number[]>((w, nd) => { w[nd.col] = Math.max(w[nd.col] ?? 0, gw(nd)); return w; }, []);
 const gGap = (G_W - gColW.reduce((t, w) => t + w, 0)) / (gColW.length - 1);
