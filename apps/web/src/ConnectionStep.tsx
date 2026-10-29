@@ -95,6 +95,8 @@ export function ConnectionForm({
       hints.suggestion.length > 0
     : errors.loginSecrets || errors.notes;
 
+  // TODO: Link the target connection setup guide here when the docs are ready. The fields are
+  // hard to fill in without it.
   return (
     <div className="flex flex-col gap-4">
       <Toggle
