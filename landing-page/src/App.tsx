@@ -42,18 +42,22 @@ const wizMsgs: WizMsg[] = [
   { role: 'user', text: "We've built an AI agent for staff. It searches knowledge bases, drafts replies, and manages documents.", files: ['PRD.pdf', 'User Research.docx', 'Policies.pdf'], specLines: 2 },
   { role: 'wizard', text: "I've read your documents. The assistant handles enterprise search, email drafting, and document management. What should happen when a user asks for information from a restricted source?", specLines: 6 },
   { role: 'user', text: "It should only search authorised sources and tell the user if it can't access something." },
-  { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 10 },
-  { role: 'user', text: "What about when it can't find relevant information?" },
-  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits. Now let me generate test cases — personas and scenarios to exercise each criterion.", specLines: 11 },
-  { role: 'wizard', text: "I've created three personas and two scenarios. Each test case pairs a persona with a scenario and runs multiple trials.", specLines: 18 },
+  { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 11 },
+  { role: 'user', text: "What about the drafting side — how do we know the replies are correct?" },
+  { role: 'wizard', text: "I'll add a second behaviour for drafting with Output Correctness, Input Interpretation Accuracy, and Capability Limits Handling. Now let me generate test cases.", specLines: 16 },
+  { role: 'wizard', text: "I've created three personas and two scenarios. Each test case pairs a persona with a scenario and runs multiple trials.", specLines: 24 },
 ];
 
 const specLines = [
   'target:', '  name: Target AI Agent', '',
   'features:', '  - name: Enterprise Search and Knowledge Retrieval',
-  '    behaviours:', '      - name: Find and use enterprise information',
+  '    behaviours:',
+  '      - name: Find and use enterprise information',
   '        criteria:', '          - Factual Accuracy', '          - Evidence Source Suitability',
-  '          - Claim Support by Evidence', '          - Appropriate Handling of Capability Limits', '',
+  '          - Claim Support by Evidence',
+  '      - name: Draft and verify responses',
+  '        criteria:', '          - Output Correctness', '          - Input Interpretation Accuracy',
+  '          - Capability Limits Handling', '',
   'personas:', '  - collaborative knowledge worker',
   '  - focused questioner', '  - policy seeker',
   'scenarios:', '  - Draft a reply using a past event record',
@@ -164,6 +168,10 @@ const insightTree = [
   { depth: 3, label: 'Factual Accuracy', value: 50, pass: false },
   { depth: 3, label: 'Evidence Source Suitability', value: 67, pass: false },
   { depth: 3, label: 'Claim Support by Evidence', value: 92, pass: true },
+  { depth: 2, label: 'Draft and verify responses', value: 89, pass: true },
+  { depth: 3, label: 'Output Correctness', value: 80, pass: true },
+  { depth: 3, label: 'Input Interpretation Accuracy', value: 88, pass: true },
+  { depth: 3, label: 'Capability Limits Handling', value: 100, pass: true },
 ];
 
 const insightBars = [
