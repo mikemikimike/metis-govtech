@@ -155,7 +155,8 @@ const STATUS_SVG={ok:'<circle cx="9" cy="9" r="7.5" fill="none" stroke="#087f73"
  stop:'<circle cx="9" cy="9" r="7.5" fill="none" stroke="#98a1aa" stroke-width="1.6"/><path d="M6 9h6" stroke="#98a1aa" stroke-width="1.6" stroke-linecap="round"/>',
  time:'<circle cx="9" cy="9" r="7.5" fill="none" stroke="#b7791f" stroke-width="1.6"/><path d="M9 5.5V9l2.5 1.8" fill="none" stroke="#b7791f" stroke-width="1.6" stroke-linecap="round"/>'};
 const statusIcon=category=>{const [key,label]=STATUS[category]||["stop",category||"Unknown"];return `<svg class="st" viewBox="0 0 18 18" width="18" height="18" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${STATUS_SVG[key]}</svg>`};
-const endingLine=t=>t.category==="succeeded"?`Reached its goal · ${t.total_turns} turns`:`${ENDING[t.category]||t.category}: ${t.message||t.stopReason}${t.attempt>1?` · retried, attempt ${t.attempt}`:""}`;
+const turnCount=t=>{const n=(t.conversation||[]).length;return n?` · ${n} turn${n===1?"":"s"}`:""};
+const endingLine=t=>t.category==="succeeded"?`Reached its goal${turnCount(t)}`:`${ENDING[t.category]||t.category}: ${t.message||t.stopReason}${t.attempt>1?` · retried, attempt ${t.attempt}`:""}`;
 const TAB_ORDER=[["failed","Failed"],["passed","Passed"],["errored","Errored"],["skipped","Skipped"]];
 const rawResult=r=>{const shown={outcome:r.outcome};if(r.score!==null&&r.score!==undefined)shown.score=r.score;if(r.reason)shown.reason=r.reason;return JSON.stringify(shown,null,1)};
 function graderOutput(x){
@@ -168,7 +169,7 @@ function renderTrialDetail(V,S,row,trial){
  const note=ended?`<div class="endnote"><b>Ended early.</b> ${esc(ENDING[trial.category]||trial.category)}: ${esc(String(trial.message||trial.stopReason).replace(/\.\s*$/,""))}. Source: ${esc(SOURCE[trial.failureSource]||"Not recorded")}.${trial.attempt>1?` <span class="n">retried · attempt ${trial.attempt}</span>`:""}</div>`:"";
  const turns=trial.conversation||[];
  const bubble=(who,text,cls)=>`<div class="say ${cls}"><b>${esc(who)}</b><p>${esc(text)}</p></div>`;
- const conv=`<div class="chat">${trial.turnCountNote?`<p class="n">${esc(trial.turnCountNote)}</p>`:""}${turns.length?turns.map(t=>`<div class="exchange"><span class="tn">Turn ${t.turn}</span>${bubble("User",t.user||"No user message recorded","user")}${bubble(V.target,!t.target||/^\[unreadable: missing/.test(t.target)?"No reply recorded":t.target,"agent")}${(t.errors||[]).map(e=>`<div class="terr">Error: ${esc(e)}</div>`).join("")}</div>`).join(""):`<p class="n">No conversation was recorded for this trial.${trial.conversationProblem?` ${esc(trial.conversationProblem)}.`:""}</p>`}</div>`;
+ const conv=`<div class="chat">${turns.length?turns.map(t=>`<div class="exchange"><span class="tn">Turn ${t.turn}</span>${bubble("User",t.user||"No user message recorded","user")}${bubble(V.target,!t.target||/^\[unreadable: missing/.test(t.target)?"No reply recorded":t.target,"agent")}${(t.errors||[]).map(e=>`<div class="terr">Error: ${esc(e)}</div>`).join("")}</div>`).join(""):`<p class="n">No conversation was recorded for this trial.${trial.conversationProblem?` ${esc(trial.conversationProblem)}.`:""}</p>`}</div>`;
  const items=trialCriteria(V,row,trial),present=TAB_ORDER.filter(([o])=>items.some(x=>x.outcome===o));
  const key=`${row.task_id}:${trial.trial_index}`,marked=items.find(x=>x.cid===S.markCol);
  const pick=(S.verdictTab||{})[key]||(marked&&present.some(([o])=>o===marked.outcome)?marked.outcome:(present[0]||[])[0]);

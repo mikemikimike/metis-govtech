@@ -70,7 +70,7 @@ def _shown(value: str | Problem) -> str:
 
 
 def conversation_rows(session_turns: tuple[Turn, ...]) -> list[dict[str, object]]:
-    """One ``{turn, user, target, errors}`` row per turn; ``turn`` counts from 1."""
+    """One ``{turn, user, target, errors}`` row per recorded turn; ``turn`` counts from 1."""
     return [
         {
             "turn": turn.index + 1,
@@ -80,14 +80,3 @@ def conversation_rows(session_turns: tuple[Turn, ...]) -> list[dict[str, object]
         }
         for turn in session_turns
     ]
-
-
-def turn_count_note(saved: int, recorded: int | None) -> str | None:
-    """A note when fewer turns have traces than the record counted, else ``None``.
-
-    A message METIS withheld never reaches the target, so it leaves no trace; a gap here is the
-    only visible sign of it.
-    """
-    if recorded is None or saved == recorded:
-        return None
-    return f"{saved} of {recorded} recorded turns have traces"

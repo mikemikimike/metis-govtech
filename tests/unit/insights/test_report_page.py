@@ -91,3 +91,5 @@ def test_trial_shows_its_conversation(experiment: Path) -> None:
     assert 'data-trial="T-1:2"' in html
     assert "Plan my trip" in html
     assert "Here is a plan" in html
+    assert "Reached its goal · 1 turn<" in html
+    assert '<span class="tn">Turn 1</span>' in html
