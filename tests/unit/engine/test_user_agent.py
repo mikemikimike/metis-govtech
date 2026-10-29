@@ -107,7 +107,7 @@ async def test_the_prompt_has_the_persona_and_scenario_and_no_target_knowledge(
     assert "A careful accountant named Dana." in system["content"]
     assert "Get a Q3 summary report." in system["content"]
     assert "⟦" in system["content"]
-    for advice in ("Haiku", "Sonnet", "AI Model", "Orca", "dropdown"):
+    for advice in ("Haiku", "Sonnet", "AI Model", "Slide Maker", "dropdown"):
         assert advice not in _text(client.requests[0])
 
 

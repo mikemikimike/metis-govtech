@@ -75,8 +75,8 @@ class TargetSessionEnded(SimulationError):
     """The session cannot carry another turn, whatever the persona sends.
 
     Not the target refusing one message but the session itself being spent —
-    a lifetime budget reached, or (the Orca API runner's live case) an input
-    cap the accumulated context keeps exceeding.
+    a lifetime budget reached, or an input cap that the accumulated context
+    keeps exceeding.
 
     Neither turn- nor run-recoverable: retrying the turn cannot succeed and a
     fresh session would not continue the same conversation. The orchestrator

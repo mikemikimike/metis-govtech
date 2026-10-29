@@ -22,12 +22,12 @@ User Agent (Python/AsyncOpenAI)  →  Runner  →  Target
 
 ### Built-in runners
 
-The two Orca-specific runners under `gen_1/runners/` are reference implementations for GovTech's Orca platform, not part of the framework contract:
+Two generic runners ship with the engine. Each is driven by a *target binding* file and needs no code per app; see [The generic runners](#the-generic-runners).
 
 | Runner | Transport | Notes |
 |--------|-----------|-------|
-| `orca_playwright` | Playwright (browser) | Drives Orca's web UI via a headless browser. Each worker gets its own browser context with isolated login. |
-| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. See [`orca_api/README.md`](gen_1/runners/orca_api/README.md) for the turn lifecycle, identifiers, and v1 endpoint coverage. |
+| `HttpRunner` | HTTP | Calls the target's REST API, guided by its OpenAPI document. |
+| `BrowserRunner` | Playwright (browser) | Drives the target's web page in headless Chromium. Needs the `playwright` extra. |
 
 Both satisfy the normative [runner contract](../../../../../../docs/runner-contract.md); a custom runner must too.
 
@@ -43,10 +43,9 @@ Charts (screenshotted as PNG) and downloads are captured and stored under the ta
 
 ### Actions and uploads
 
-Each turn the user agent emits a typed action list (`ChosenAction` — a union of `UploadFileAction`, `ButtonClickAction`, `FormFillAction`); the orchestrator passes it straight to `Runner.send_turn(message, actions)`, and the runner dispatches on the action type. Two properties are deliberate:
+Each turn the user agent emits one plain-language action; the orchestrator passes it to `Runner.act(action, promised)`, and the runner works out how to carry it out. A scenario's fixtures are held by the trial's `ArtifactLedger` from the start, and a runner records each upload with `record_upload`. A trial whose scenario names a fixture that was never uploaded ends as `system_error` with the failure `fixture_never_uploaded`.
 
-- **Uploads are gated by the scenario fixture allow-list, not by the target's per-turn permission.** A `file_upload` slot is offered for each `scenario.fixtures` entry not yet attached (and, in `orca_api`, not yet rejected) — synthetic, not derived from the target's current state. The **caller** validates an upload against that allow-list and the fixture's presence on disk before dispatch, withholding the action and reporting it as `withheld` if it fails; the runner never sees it. Neither side checks whether the target is prompting for a file this turn. This matches Orca, where attaching a file is a composer affordance available on any message.
-- **Only the persona honors conversational "wait" cues.** If the target says "please wait until next turn," that stays natural-language text in the observation — nothing mechanically blocks an upload. The persona LLM is trusted to read the cue and hold the action. A premature upload is discovered only at the transport layer (a backend rejection in `orca_api`, marking the fixture spent; a browser interaction in `orca_playwright`), never pre-empted. A target that truly gated uploads per turn would need runner-level enforcement that does not exist today.
+If the target says "please wait until next turn," that stays natural-language text in the observation. Nothing mechanically blocks an upload: the user agent is trusted to read the cue and hold the action.
 
 ### LLM-call log
 
@@ -56,11 +55,11 @@ The same wrapper names the METIS-internal Langfuse on every request, so each att
 
 ### Transport log
 
-`transport_log.LoggingTransport` wraps an `httpx` transport and writes every request and the response that answers it to `outputs/trials/<id>/evidence/log.jsonl`, so a retry loop above it gets one pair of entries per attempt with no help. Each entry has an ID, a kind (`request` or `response`), a role (`action` or `result`), the request it answers, a one-line summary written by code, redacted headers and a body. `Authorization` and each header named in the target binding's `secret_headers` are written as `***`; only header names are redacted, so a secret placed in a URL or body would be logged as sent. A body over 64 KB goes to `evidence/<id>.bin`, and a downloaded artifact is logged as an `ArtifactRef` (its path and SHA-256) instead of a copy. The log is for `gen_2`; `gen_1` does not write it.
+`transport_log.LoggingTransport` wraps an `httpx` transport and writes every request and the response that answers it to `outputs/trials/<id>/evidence/log.jsonl`, so a retry loop above it gets one pair of entries per attempt with no help. Each entry has an ID, a kind (`request` or `response`), a role (`action` or `result`), the request it answers, a one-line summary written by code, redacted headers and a body. `Authorization` and each header named in the target binding's `secret_headers` are written as `***`; only header names are redacted, so a secret placed in a URL or body would be logged as sent. A body over 64 KB goes to `evidence/<id>.bin`, and a downloaded artifact is logged as an `ArtifactRef` (its path and SHA-256) instead of a copy.
 
-`artifacts.ArtifactLedger` is the one place a `gen_2` runner records a file, as METIS's own `Artifact`. `record_download` saves the body under the last component of the target's name in `<trial>/artifacts/`, writing `<name>.part` and renaming it only once the bytes are whole and checked, so a partial download is never kept. A name that is taken becomes `name-1.ext`, `name-2.ext`; nothing already saved is overwritten and no entry is ever replaced. It returns the transport log's `ArtifactRef`. The byte check refuses a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip` that does not start with its type's signature, and any JSON document or JSON content type saved under a name that is not `.json`; a refused download leaves no file and no entry. A fixture has one entry however often it is uploaded: `record_upload` stamps the first upload's turn on it and adds nothing. The caller supplies `at_simulated_turn`. Each entry's `content_description` is one facts line written by code, never the file's content: name, type and size, and for a CSV its data rows, columns and header. Facts are computed once per distinct digest. `gen_1` does not use it.
+`artifacts.ArtifactLedger` is the one place a runner records a file, as METIS's own `Artifact`. `record_download` saves the body under the last component of the target's name in `<trial>/artifacts/`, writing `<name>.part` and renaming it only once the bytes are whole and checked, so a partial download is never kept. A name that is taken becomes `name-1.ext`, `name-2.ext`; nothing already saved is overwritten and no entry is ever replaced. It returns the transport log's `ArtifactRef`. The byte check refuses a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip` that does not start with its type's signature, and any JSON document or JSON content type saved under a name that is not `.json`; a refused download leaves no file and no entry. A fixture has one entry however often it is uploaded: `record_upload` stamps the first upload's turn on it and adds nothing. The caller supplies `at_simulated_turn`. Each entry's `content_description` is one facts line written by code, never the file's content: name, type and size, and for a CSV its data rows, columns and header. Facts are computed once per distinct digest.
 
-`gen_2` is chosen by a runner factory's `generation = "gen_2"`. Its `Runner` is `setup`, `act(action, promised)`, `end_chat(promised)` and `teardown`; the orchestrator owns the trial's `ArtifactLedger` and binds it to the runner with `use_ledger` before `setup`, so every file a runner records lands in the one record. `act` is called once per turn and the runner's own count of calls is the turn's `at_simulated_turn`, from 1. The closing `end_chat` runs after goal, abandonment, `max_turns` or `timeout`, but not after `interrupted`, `target_exhausted` or `system_error`, and it is not a turn. A `TurnRecoverableError` or `ResponseTimeoutError` from `act` becomes an undelivered `Observation` the user agent is told about, and a second one in a row raises `ConsecutiveFailureEscalation`, as in `gen_1`. Fixtures are described by `file_facts`, with no LLM call. A factory that needs the specification defines `from_specification(specification, inputs_dir)`. `HttpRunnerFactory` uses it to load the specification's `target_binding` from the experiment's `inputs/`, so a binding must sit inside the input folder.
+A `Runner` is `setup`, `act(action, promised)`, `end_chat(promised)` and `teardown`; the orchestrator owns the trial's `ArtifactLedger` and binds it to the runner with `use_ledger` before `setup`, so every file a runner records lands in the one record. `act` is called once per turn and the runner's own count of calls is the turn's `at_simulated_turn`, from 1. The closing `end_chat` runs after goal, abandonment, `max_turns` or `timeout`, but not after `interrupted`, `target_exhausted` or `system_error`, and it is not a turn. A `TurnRecoverableError` or `ResponseTimeoutError` from `act` becomes an undelivered `Observation` the user agent is told about, and a second one in a row raises `ConsecutiveFailureEscalation`. Fixtures are described by `file_facts`, with no LLM call. A factory that needs the specification defines `from_specification(specification, inputs_dir)`. `HttpRunnerFactory` uses it to load the specification's `target_binding` from the experiment's `inputs/`, so a binding must sit inside the input folder.
 
 ## The generic runners
 
@@ -178,10 +177,8 @@ agent is its own model role. See the [model guide](../../../../../../docs/guide/
 ### The browser runner, for an app with only a web page
 
 > **Never run against a live page.** `BrowserRunner` has been tested on a fake page and on
-> a static page in headless Chromium, and on nothing else. Orca's web sign-in changed
-> after the prototype it was ported from, and `orca_playwright` stays the runner for
-> Orca's UI. Expect the first real app to need changes. Making it work on one belongs to
-> stage 4.
+> a static page in headless Chromium, and on nothing else. Expect the first real app to
+> need changes.
 
 A browser binding has `transport: browser` and a `start_url` instead of `spec_url`; it
 takes no `auth`, `secret_headers`, `submissions`, `forbidden_calls` or `preflight_reads`.
@@ -214,7 +211,7 @@ names and sign-in steps are made up:
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json
 # A chat app that has only a web page, bound to the generic browser runner. The runner
 # has never met a live page, and this file is a template to change: the URL, the secret
-# names and the sign-in steps are made up. Orca's own sign-in is not described here.
+# names and the sign-in steps are made up.
 schema_version: 1
 identity: {name: Example web chat}
 transport: browser
@@ -244,7 +241,7 @@ trial is built, through `metis.core.model_settings`. The
 [model guide](../../../../../../docs/guide/models.md) lists their variables, the fallback, and the
 precedence of the Specification fields. Each `TrialConfig` records the models of its trial.
 
-Runner-specific variables (e.g. `ORCA_URL`, `ORCA_API_URL`, `ORCA_API_KEY`) are documented in each runner's module docstring. Judge/evaluation variables (`JUDGE_API_KEY`, `JUDGE_BASE_URL`, `JUDGE_MODEL`) are documented in the [evaluation README](../evaluation/README.md).
+A target binding names the variables its runner reads (`spec_url`, `auth.secret_env`, `secret_headers`). Judge/evaluation variables (`JUDGE_API_KEY`, `JUDGE_BASE_URL`, `JUDGE_MODEL`) are documented in the [evaluation README](../evaluation/README.md).
 
 ## Running
 
@@ -269,7 +266,7 @@ simulation/
 ├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
 ├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
 ├── types.py           — Pydantic models (Specification, Scenario, Persona, Observation, Promise)
-├── user_context.py    — Persona and scenario text, with their metadata, for both user agents
+├── user_context.py    — Persona and scenario text, with their metadata, for the user agent
 ├── config.py          — Shared configuration (retry defaults)
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage
@@ -278,21 +275,8 @@ simulation/
 ├── binding.py         — Loads a target binding from the experiment's inputs
 ├── evidence.py        — Pointers into the transport log
 ├── user_agent/        — Persona and scenario prompt, ⟦ ⟧ actions, file facts, promise list
-├── runners/           — The generic runners
-│   ├── http.py            — HttpRunner and HttpRunnerFactory
-│   ├── browser.py         — BrowserRunner and BrowserRunnerFactory
-│   └── ...                — tools, rules, spans and prompts shared by both
-└── gen_1/             — today's simulator: typed actions on offered slots
-    ├── trial.py           — Builds today's UserAgent and Orchestrator for one attempt
-    ├── runner.py          — Runner ABC
-    ├── types.py           — Actions, slots, Observation, user agent input/output
-    ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
-    ├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
-    ├── artifact_summarizer.py — LLM descriptions of fixtures and artifacts
-    ├── user_agent/        — LLM-powered user agent (persona embodiment)
-    └── runners/
-        ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
-        ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
-        │                        element resolution, recovery, retry)
-        └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
+└── runners/           — The generic runners
+    ├── http.py            — HttpRunner and HttpRunnerFactory
+    ├── browser.py         — BrowserRunner and BrowserRunnerFactory
+    └── ...                — tools, rules, spans and prompts shared by both
 ```

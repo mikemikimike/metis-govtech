@@ -207,12 +207,12 @@ class TestNoPlaywrightImport:
         assert "from playwright" not in source
         assert "import playwright" not in source
 
-    def test_experiment_module_has_no_playwright_runner_import(self) -> None:
-        """Verify experiment.py does not import OrcaPlaywrightRunner directly."""
+    def test_experiment_module_has_no_runner_import(self) -> None:
+        """Verify experiment.py does not import a runner directly."""
         import metis.engine.simulation.experiment as mod
 
         source = inspect.getsource(mod)
-        assert "OrcaPlaywrightRunner" not in source
+        assert "BrowserRunner" not in source
 
 
 def _partial_record(

@@ -1,4 +1,4 @@
-"""The real interviewer, over the PlatformAI gateway.
+"""The real interviewer, over the LLM gateway.
 
 The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url`. The interview
 and the embeddings are two model roles (`metis.core.model_settings`). Each has its own model,

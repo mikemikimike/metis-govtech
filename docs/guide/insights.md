@@ -7,7 +7,7 @@ the traces and writes `outputs/reports/results.json` but builds no report.
 ## Usage
 
 ```bash
-metis insights report --results-file experiments/execute/orca-eval-20260730-143022/outputs/reports/results.json
+metis insights report --results-file experiments/execute/toyapp-http-simple-20260730-143022/outputs/reports/results.json
 ```
 
 `evaluate` and `run` print this exact command, with the path already filled in, at the
@@ -24,7 +24,7 @@ The command finds the execution root from the `outputs/reports/` path. It reads
 the input snapshot and trial records, then writes reports beside the results:
 
 ```text
-experiments/execute/orca-eval-20260730-143022/
+experiments/execute/toyapp-http-simple-20260730-143022/
 ├── inputs/specification.yaml
 └── outputs/
     ├── trials/*/record.json

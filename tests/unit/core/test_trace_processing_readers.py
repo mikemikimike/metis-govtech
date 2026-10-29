@@ -39,7 +39,7 @@ class TestTextOf:
         assert text_of(value, role="assistant") == "a1"
 
     def test_bare_message_list_is_read(self) -> None:
-        """Orca's ``Claude.ainvoke`` output is a list with no ``messages`` wrapper."""
+        """A model call's output can be a list with no ``messages`` wrapper."""
         assert (
             text_of([{"role": "assistant", "content": "done"}], role="assistant")
             == "done"
@@ -138,7 +138,7 @@ class TestTools:
         assert problem.kind == "unsupported"
 
     def test_python_syntax_string_stays_text(self) -> None:
-        """Orca's tool outputs look like dicts but are Python syntax. Never parsed."""
+        """Some tool outputs look like dicts but are Python syntax. Never parsed."""
         raw = "{'_type': 'form_request', 'id': 'f1'}"
         assert tool_result(_tool(output=raw)) == raw
 

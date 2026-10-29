@@ -115,9 +115,9 @@ metis engine evaluate --experiment-dir experiments/execute/toyapp-http-simple-20
 If simulation stops before all runs finish, continue the output directory that you name. `simulate` prints this exact command, so you never retype a timestamp:
 
 ```bash
-metis engine simulate --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 # or run the remaining simulation and then evaluate everything:
-metis engine run --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine run --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 ```
 
 Resume reads the experiment and the fixtures from the frozen `inputs/` snapshot in the named directory, not from the source directory. It retries only missing, invalid, or `system_error` records, and appends to the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing. Passing `--resume` with `--input-dir` is an error: the message lists the outputs that exist for the experiment `id` and names the correct flag.
@@ -148,7 +148,7 @@ The combined `run` command closes the Simulation TUI before it starts the evalua
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. The `outputs/reports/` directory is created by `evaluate` or `run`, which write `results.json`; `metis insights report` adds `report.json` and `report.html`. Simulation-only runs stop after `outputs/trials/` and `logs/`:
 
 ```text
-experiments/execute/orca-eval-20260730-143022/
+experiments/execute/toyapp-http-simple-20260730-143022/
 ├── inputs/
 │   ├── specification.yaml
 │   └── fixtures/
@@ -442,7 +442,7 @@ The flags below are optional and apply to both modes:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/execute/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
+| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/execute/toyapp-http-simple-20260820-143000/`. It must hold an `inputs/` snapshot |
 | `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase evaluation logging verbosity |
 | `--quiet` | `false` | Suppress all output below ERROR |

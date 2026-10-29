@@ -1,4 +1,4 @@
-"""The published target binding schema, and the Orca binding validated against it."""
+"""The published target binding schema, and a chat app binding validated against it."""
 
 import json
 from pathlib import Path

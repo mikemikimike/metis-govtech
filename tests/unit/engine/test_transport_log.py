@@ -141,16 +141,14 @@ async def test_a_malformed_header_value_does_not_leak_into_the_log(
             raise httpx.LocalProtocolError(f"Illegal header value {value!r}")
 
     log = TransportLog.for_trial(tmp_path)
-    transport = LoggingTransport(
-        _LeakyInner(), log, secret_headers=("x-platformai-key",)
-    )
+    transport = LoggingTransport(_LeakyInner(), log, secret_headers=("x-gateway-key",))
     async with httpx.AsyncClient(
         transport=transport, base_url="https://app.example"
     ) as client:
         with pytest.raises(httpx.LocalProtocolError):
             await client.get(
                 "/api/v1/sessions",
-                headers={"x-platformai-key": f"{_CANARY}\r\nEvil: true"},
+                headers={"x-gateway-key": f"{_CANARY}\r\nEvil: true"},
             )
 
     files = [p for p in tmp_path.rglob("*") if p.is_file()]
@@ -185,17 +183,17 @@ async def test_a_secret_appears_in_no_written_file(tmp_path: Path) -> None:
             "transport": "http",
             "spec_url": "https://app.example/openapi.json",
             "secret_headers": [
-                {"match": "POST /api/**", "header": "X-PlatformAI-Key", "env": "KEY"}
+                {"match": "POST /api/**", "header": "X-Gateway-Key", "env": "KEY"}
             ],
         }
     )
     names = tuple(h.header for h in binding.secret_headers)
-    assert names == ("X-PlatformAI-Key",)
+    assert names == ("X-Gateway-Key",)
 
     def handler(request: httpx.Request) -> httpx.Response:
         # A server that echoes the credential back must not get it into the log.
         return httpx.Response(
-            200, headers={"x-platformai-key": _CANARY}, json={"ok": True}
+            200, headers={"x-gateway-key": _CANARY}, json={"ok": True}
         )
 
     async with _client(tmp_path, handler, names) as client:
@@ -204,7 +202,7 @@ async def test_a_secret_appears_in_no_written_file(tmp_path: Path) -> None:
             json={"message": "hi"},
             headers={
                 "Authorization": f"Bearer {_CANARY}",
-                "x-platformai-key": _CANARY,
+                "x-gateway-key": _CANARY,
                 "Accept": "application/json",
             },
         )
@@ -222,9 +220,9 @@ async def test_a_secret_appears_in_no_written_file(tmp_path: Path) -> None:
     superseded = _rows(tmp_path / "evidence" / "log-superseded-20261021T061500Z.jsonl")
     request, response = superseded
     assert request["headers"]["authorization"] == "***"
-    assert request["headers"]["x-platformai-key"] == "***"
+    assert request["headers"]["x-gateway-key"] == "***"
     assert request["headers"]["accept"] == "application/json"
-    assert response["headers"]["x-platformai-key"] == "***"
+    assert response["headers"]["x-gateway-key"] == "***"
 
 
 def test_a_body_of_exactly_the_limit_stays_inline(tmp_path: Path) -> None:

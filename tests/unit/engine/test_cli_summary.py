@@ -41,10 +41,10 @@ class TestFinalSummary:
             ),
         ]
         state = SimulationState(
-            experiment_id="orca-eval", scenarios=scenarios, total_trials=1
+            experiment_id="toyapp-eval", scenarios=scenarios, total_trials=1
         )
         summary = _format_final_summary(state, "/path/to/exp", "/path/to/exp/logs")
-        assert "orca-eval" in summary
+        assert "toyapp-eval" in summary
         assert "1/1" in summary
         assert "/path/to/exp/logs" in summary
 

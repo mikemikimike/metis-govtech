@@ -36,81 +36,84 @@ test("reveals a first value by word while preserving its exact whitespace", () =
 test("animates only a replaced word", () => {
   assert.deepEqual(
     transitionFrames({
-      displayed: "Orca coordinates five specialists",
-      previous: "Orca coordinates five specialists",
-      next: "Orca coordinates four specialists",
+      displayed: "Helpdesk coordinates five specialists",
+      previous: "Helpdesk coordinates five specialists",
+      next: "Helpdesk coordinates four specialists",
       reducedMotion: false,
     }),
-    ["Orca coordinates specialists", "Orca coordinates four specialists"],
+    [
+      "Helpdesk coordinates specialists",
+      "Helpdesk coordinates four specialists",
+    ],
   );
 });
 
 test("animates an insertion without restarting the field", () => {
   const frames = transitionFrames({
-    displayed: "Orca coordinates specialists",
-    previous: "Orca coordinates specialists",
-    next: "Orca coordinates five specialists",
+    displayed: "Helpdesk coordinates specialists",
+    previous: "Helpdesk coordinates specialists",
+    next: "Helpdesk coordinates five specialists",
     reducedMotion: false,
   });
-  assert.deepEqual(frames, ["Orca coordinates five specialists"]);
+  assert.deepEqual(frames, ["Helpdesk coordinates five specialists"]);
   assert(
     frames.every(
-      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+      (frame) => frame.includes("Helpdesk") && frame.includes("specialists"),
     ),
   );
 });
 
 test("animates a deletion without restarting the field", () => {
   const frames = transitionFrames({
-    displayed: "Orca coordinates five specialists",
-    previous: "Orca coordinates five specialists",
-    next: "Orca coordinates specialists",
+    displayed: "Helpdesk coordinates five specialists",
+    previous: "Helpdesk coordinates five specialists",
+    next: "Helpdesk coordinates specialists",
     reducedMotion: false,
   });
-  assert.deepEqual(frames, ["Orca coordinates specialists"]);
+  assert.deepEqual(frames, ["Helpdesk coordinates specialists"]);
   assert(
     frames.every(
-      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+      (frame) => frame.includes("Helpdesk") && frame.includes("specialists"),
     ),
   );
 });
 
 test("keeps matching words between separated changes visible", () => {
   const frames = transitionFrames({
-    displayed: "Orca coordinates five specialists today",
-    previous: "Orca coordinates five specialists today",
-    next: "Orca routes four specialists securely",
+    displayed: "Helpdesk coordinates five specialists today",
+    previous: "Helpdesk coordinates five specialists today",
+    next: "Helpdesk routes four specialists securely",
     reducedMotion: false,
   });
   assert(
     frames.some(
-      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+      (frame) => frame.includes("Helpdesk") && frame.includes("specialists"),
     ),
   );
   assert(
     frames.every(
-      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+      (frame) => frame.includes("Helpdesk") && frame.includes("specialists"),
     ),
   );
-  assert.equal(frames.at(-1), "Orca routes four specialists securely");
+  assert.equal(frames.at(-1), "Helpdesk routes four specialists securely");
 });
 
 test("treats punctuation and capitalisation as part of a changed word", () => {
   const frames = transitionFrames({
-    displayed: "Orca helps officers.",
-    previous: "Orca helps officers.",
-    next: "Orca helps Officers!",
+    displayed: "Helpdesk helps officers.",
+    previous: "Helpdesk helps officers.",
+    next: "Helpdesk helps Officers!",
     reducedMotion: false,
   });
-  assert(frames.some((frame) => frame === "Orca helps"));
-  assert.equal(frames.at(-1), "Orca helps Officers!");
+  assert(frames.some((frame) => frame === "Helpdesk helps"));
+  assert.equal(frames.at(-1), "Helpdesk helps Officers!");
 });
 
 test("restores exact whitespace and line breaks after a correction", () => {
-  const next = "Orca supports officers!\nToday";
+  const next = "Helpdesk supports officers!\nToday";
   const frames = transitionFrames({
-    displayed: "Orca helps officers.\nToday",
-    previous: "Orca helps officers.\nToday",
+    displayed: "Helpdesk helps officers.\nToday",
+    previous: "Helpdesk helps officers.\nToday",
     next,
     reducedMotion: false,
   });

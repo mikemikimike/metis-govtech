@@ -18,7 +18,7 @@ make install                    # installs workspace dependencies
 # Configure environment
 cp .env.example .env
 # Fill in: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
-#          LANGFUSE_BASE_URL, ORCA_API_URL, ORCA_API_KEY
+#          LANGFUSE_BASE_URL, TOYAPP_API_URL
 ```
 
 The [model guide](../../docs/guide/models.md) lists the model variables of each role and the
@@ -104,7 +104,7 @@ See [`examples/http-agentic_eval_toyapp-1/`](examples/http-agentic_eval_toyapp-1
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. Reports appear after `evaluate` or `run`:
 
 ```text
-experiments/execute/orca-eval-20260730-143022/
+experiments/execute/toyapp-http-simple-20260730-143022/
 ├── inputs/
 │   ├── specification.yaml
 │   └── fixtures/

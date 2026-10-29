@@ -41,7 +41,7 @@ def _obs(
         "id": obs_id,
         "traceId": trace_id,
         "sessionId": session_id,
-        "name": "orca-chat" if parent is None else "child",
+        "name": "chat-turn" if parent is None else "child",
         "type": "AGENT",
         "input": "a question",
         "output": output,

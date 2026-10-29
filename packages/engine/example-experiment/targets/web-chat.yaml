@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json
 # A chat app that has only a web page, bound to the generic browser runner. The runner
 # has never met a live page, and this file is a template to change: the URL, the secret
-# names and the sign-in steps are made up. Orca's own sign-in is not described here.
+# names and the sign-in steps are made up.
 schema_version: 1
 identity: {name: Example web chat}
 transport: browser

@@ -1,7 +1,7 @@
 """Production composition root for the wizard.
 
 This is the only module that assembles more than one adapter. Shared application code and the
-CLI adapter depend on protocols; this module supplies the PlatformAI implementation.
+CLI adapter depend on protocols; this module supplies the LLM gateway implementation.
 """
 
 from __future__ import annotations

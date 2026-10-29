@@ -209,7 +209,6 @@ def _failure_source(value: object) -> str | None:
     return {
         "product": "target",
         "target": "target",
-        "orca": "target",
         "user_agent": "userAgent",
         "useragent": "userAgent",
         "evaluation_runner": "evaluationRunner",

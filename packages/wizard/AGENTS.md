@@ -96,7 +96,7 @@ src/metis/wizard/
 │                 matcher and primer
 ├── adapters/
 │   ├── cli/      Typer commands, Rich renderer and terminal input
-│   └── llm/      PlatformAI structured-output and embedding gateway
+│   └── llm/      LLM gateway: structured output and embeddings
 ├── bootstrap.py  the only adapter composition root
 └── __init__.py   stable headless facade: the Interview interface and interaction models
 ```

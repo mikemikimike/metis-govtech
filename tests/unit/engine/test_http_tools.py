@@ -196,27 +196,27 @@ async def test_secret_headers_and_the_credential_are_added_and_redacted(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("model_set", [True, False])
-async def test_orcas_model_headers_are_sent_only_when_their_variables_are_set(
+async def test_model_headers_are_sent_only_when_their_variables_are_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_set: bool
 ) -> None:
-    for var in ("ORCA_PLATFORM_AI_AGENT_MODEL", "ORCA_PLATFORM_AI_TOOL_MODEL"):
+    for var in ("GATEWAY_AGENT_MODEL", "GATEWAY_TOOL_MODEL"):
         monkeypatch.delenv(var, raising=False)
     if model_set:
-        monkeypatch.setenv("ORCA_PLATFORM_AI_AGENT_MODEL", "agent-m")
-        monkeypatch.setenv("ORCA_PLATFORM_AI_TOOL_MODEL", "tool-m")
+        monkeypatch.setenv("GATEWAY_AGENT_MODEL", "agent-m")
+        monkeypatch.setenv("GATEWAY_TOOL_MODEL", "tool-m")
     runner, target = await _ready(
         tmp_path,
         extra="secret_headers:\n"
-        "  - {match: 'POST /chat', header: X-PlatformAI-Agent-Model, env: ORCA_PLATFORM_AI_AGENT_MODEL}\n"
-        "  - {match: 'POST /chat', header: X-PlatformAI-Tool-Model, env: ORCA_PLATFORM_AI_TOOL_MODEL}\n",
+        "  - {match: 'POST /chat', header: X-Gateway-Agent-Model, env: GATEWAY_AGENT_MODEL}\n"
+        "  - {match: 'POST /chat', header: X-Gateway-Tool-Model, env: GATEWAY_TOOL_MODEL}\n",
     )
     runner.begin_action("Say ⟦hi⟧")
 
     await runner.http_request("POST", "/chat", json={"m": "{{1}}"})
 
     headers = target.sent("/api/v1/chat")[0].headers
-    assert headers.get("x-platformai-agent-model") == ("agent-m" if model_set else None)
-    assert headers.get("x-platformai-tool-model") == ("tool-m" if model_set else None)
+    assert headers.get("x-gateway-agent-model") == ("agent-m" if model_set else None)
+    assert headers.get("x-gateway-tool-model") == ("tool-m" if model_set else None)
 
 
 # --- the specification ----------------------------------------------------------------

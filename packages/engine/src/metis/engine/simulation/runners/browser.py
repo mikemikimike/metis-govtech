@@ -1,8 +1,8 @@
 """The generic browser runner: the page tools and the rules code enforces on them.
 
 **Status: built and tested offline only; it has never met a live page.** Its tests drive a
-fake page and a static one in headless Chromium. ``orca_playwright`` stays the runner for
-Orca's UI, and making this one work against a real app belongs to stage 4.
+fake page and a static one in headless Chromium. Making it work against a real app is the
+next piece of work.
 
 ``BrowserRunnerFactory`` loads the specification's browser binding, holds one browser for
 every trial and, if the binding has a ``login``, signs in once in ``start()``: the runner
