@@ -28,8 +28,8 @@ class DemoTaskCompletionGrader(Grader[JudgeArgs]):
     """Demo: one judged result for the whole session.
 
     Shows the simplest LLM grader: the session scope, its own ``criteria()``, and one
-    ``judge()`` call for each selected piece. The judge reads every turn with its tool calls,
-    because the evidence for an earlier request often sits in an earlier turn.
+    ``judge()`` call for each selected piece. The judge reads every recorded turn with its
+    tool calls, because the evidence for an earlier request often sits in an earlier one.
     """
 
     args_model = JudgeArgs

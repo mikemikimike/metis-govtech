@@ -40,14 +40,14 @@ class TestOrchestrationLogger:
             trial_index=1,
             num_trials=1,
             stop_reason="goal_achieved",
-            total_turns=3,
+            simulated_turns_completed=3,
             duration_seconds=226.0,
         )
         orch.close()
         content = (tmp_path / "simulate.log").read_text()
         assert "TRIAL direct-question x cooperative [trial 1/1] COMPLETED" in content
         assert "goal_achieved" in content
-        assert "3 turns" in content
+        assert "3 simulated turns" in content
 
     def test_scenario_completed(self, tmp_path: Path) -> None:
         orch = OrchestrationLogger(log_dir=tmp_path)

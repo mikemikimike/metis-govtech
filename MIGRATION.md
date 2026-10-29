@@ -515,6 +515,10 @@ no stored object).
   `trials/<scenario>-<persona>-<trial>/`. Old `record.json` files under the old `runs/`
   directory are not migrated or read — run the simulation again to produce
   `trials/`-rooted output under the new field names.
+- In `record.json`, `outcome.total_turns` is now `outcome.simulated_turns_completed`, and
+  `prior_failures[].turn_reached` is now `prior_failures[].simulated_turns_completed`. Both
+  count the simulated turns that finished. `schema_version` stays `1`, but a record with the
+  old keys no longer loads, because the new field is required. Run the simulation again.
 
 **Report JSON**
 
@@ -611,7 +615,7 @@ failed.
     only a setup or mapping problem.
   - Read `resultTable.rows` as one entry per Task. Each row has `results` per criterion and a
     `trials` list with the per-trial `results`.
-  - Read trial `total_turns` in place of `turns`. Read the per-trial `results` from
+  - Read trial `simulated_turns_completed` in place of `turns`. Read the per-trial `results` from
     `resultTable.rows[].trials` in place of trial `results`.
   - Read unmapped entry `records` in place of `evidence`. Each item is the original
     `GraderRecord`.

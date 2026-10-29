@@ -79,4 +79,4 @@ class Promise(BaseModel, frozen=True):
 
     name: str
     turn: int
-    """The turn whose reply promised it."""
+    """The simulated turn whose reply promised it."""

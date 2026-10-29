@@ -133,7 +133,9 @@ class TrialConfig(BaseModel, extra="ignore"):
 
 class TrialOutcome(BaseModel, extra="ignore"):
     stop_reason: str
-    total_turns: int
+    simulated_turns_completed: int
+    """How many simulated turns finished. A retried delivery counts once, and the closing
+    end-of-chat step does not count. A trial that crashed holds the count at the crash."""
     duration_seconds: float
     failure_source: str | None = None
     """Which party caused a failed trial, such as ``"target"``, ``"user_agent"`` or
@@ -144,12 +146,30 @@ class TrialOutcome(BaseModel, extra="ignore"):
 
 
 class TrialFailure(BaseModel, extra="ignore"):
+    """One attempt at a trial that failed with an engine-side error and was retried.
+
+    The experiment worker runs a trial up to ``TrialRecord.max_allowed_attempts`` times. After
+    each attempt that raises, it appends one ``TrialFailure`` to ``TrialRecord.prior_failures``
+    and tries again. These are failures of the engine's own execution, such as a crash or an
+    unreachable service. A trial that ran to its end and stopped for a reason such as
+    ``max_turns`` is not a failure here; that is ``TrialOutcome.stop_reason``.
+    """
+
     attempt_number: int
+    """Which attempt failed, counting from 1."""
     failure_type: str
+    """The class name of the exception that ended the attempt."""
     submission_phase: Literal["pre", "post", "unknown"] = "unknown"
-    turn_reached: int
+    """Whether the failure came before (``"pre"``) or after (``"post"``) the attempt's message
+    reached the target. The engine currently always writes ``"unknown"``."""
+    simulated_turns_completed: int
+    """How many simulated turns the attempt had completed when it failed. A crash during
+    simulated turn 3 gives 2, because turn 3 did not finish. It is 0 when the attempt failed
+    before completing any turn or left no partial record to count from."""
     error_message: str
+    """The exception text, or the class name when the exception has none."""
     duration_ms: int
+    """Wall-clock time from the start of the attempt to the failure, in milliseconds."""
 
 
 class TrialRecord(BaseModel, extra="ignore"):

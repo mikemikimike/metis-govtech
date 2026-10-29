@@ -38,8 +38,8 @@ class DemoTraceBudgetArgs(GraderArgs):
 class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
     """Demo: the session stayed within the allowed number of traces.
 
-    The simplest use of the trace processor. Code-based and session-scoped: counts every turn,
-    including turns whose target failed, and scores 1.0 when the count is at most
+    The simplest use of the trace processor. Code-based and session-scoped: counts every recorded
+    turn, including those whose target failed, and scores 1.0 when the count is at most
     ``max_traces`` and 0.0 otherwise. Errors on a session with no traces, since there is nothing
     to count. One trace is usually one persona message and the target's reply, so this is a
     budget on exchanges.

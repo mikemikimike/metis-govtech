@@ -139,7 +139,9 @@ def test_table_row_pools_the_trials_of_one_test_case(experiment: Path) -> None:
 
 def test_trial_data_carries_engine_turn_count(experiment: Path) -> None:
     report = _build(experiment)
-    assert {trial["total_turns"] for trial in report["trials"]["items"]} == {3}
+    assert {
+        trial["simulated_turns_completed"] for trial in report["trials"]["items"]
+    } == {3}
     assert report["scores"]["trialSuccess"]["successful"] == 4
 
 

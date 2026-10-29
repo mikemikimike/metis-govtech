@@ -44,7 +44,8 @@ class ExplanationUsefulnessGrader(Grader[ExplanationUsefulnessArgs]):
     """Whether the assistant's explanations help the user understand a result or decision.
 
     At session scope, by default, one verdict, because one explanation can span several
-    turns. At subsession scope, one verdict for each reply, judged with the turns before it.
+    recorded turns. At subsession scope, one verdict for each reply, judged with the recorded
+    turns before it.
     Either way the result is errored when there is no explanation and none was needed.
     """
 

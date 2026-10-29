@@ -36,7 +36,7 @@ class DemoRequiredToolGrader(Grader[DemoRequiredToolArgs]):
     Shows a code grader: it declares a taxonomy and selects the session like an LLM grader,
     then checks the tool calls itself with no judge call. Every ``TOOL`` observation counts, at
     any depth, so a call a sub-agent made several levels down still counts. Scores 1.0 if found,
-    else 0.0. Errors on a session with no turns.
+    else 0.0. Errors on a session with no recorded turns.
     """
 
     args_model = DemoRequiredToolArgs
@@ -61,7 +61,7 @@ class DemoRequiredToolGrader(Grader[DemoRequiredToolArgs]):
             result = GraderResult(
                 status="scored",
                 score=0.0,
-                reason=f"No {name} call in {len(calls)} tool call(s) across {len(session)} turn(s).",
+                reason=f"No {name} call in {len(calls)} tool call(s) across {len(session)} recorded turn(s).",
                 scope="session",
             )
         else:
@@ -70,8 +70,8 @@ class DemoRequiredToolGrader(Grader[DemoRequiredToolArgs]):
             result = GraderResult(
                 status="scored",
                 score=1.0,
-                reason=f"{name} was called {len(matches)} time(s), first in turn "
-                f"{first.turn_index + 1}{by}.",
+                reason=f"{name} was called {len(matches)} time(s), first in recorded "
+                f"turn {first.turn_index + 1}{by}.",
                 scope="session",
             )
         return GradingOutput(results=[result])

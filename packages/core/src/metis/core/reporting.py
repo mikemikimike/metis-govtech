@@ -2,9 +2,9 @@
 
 `metis engine evaluate` runs each criterion's grader once per session, applies the criterion's
 threshold to every ``GraderResult`` the grader returned, and writes one ``GraderRecord`` per
-grader per session. A record holds one ``RecordedResult`` for each thing judged: a per-turn grader over
-a 10-turn session contributes 10 results, a session grader 1, so a report should show each
-result count beside its rate.
+grader per session. A record holds one ``RecordedResult`` for each thing judged: a grader that
+judges each recorded turn over a session of 10 recorded turns contributes 10 results, a session
+grader 1, so a report should show each result count beside its rate.
 
 The models live in metis-core as the shared evaluation output contract.
 EvaluationResults is code-produced, like TrialRecord, so it has no published JSON Schema file.

@@ -963,9 +963,9 @@ part to adapt is `at_simulated_turn`, which the spike numbers differently from M
   `1` (**checked**, `V5` TC-004 #1). The same trial would put the same file on different
   numbers depending on the runner. The generic runner must use METIS's convention.
 - **The closing step's files keep the last turn's `at_simulated_turn`**, as in the spike, and the
-  closing step isn't counted in `total_turns`.
+  closing step isn't counted in `simulated_turns_completed`.
 
-**METIS today.** `TrialOutcome.total_turns` counts completed turns, and `Artifact.at_simulated_turn`
+**METIS today.** `TrialOutcome.simulated_turns_completed` counts completed turns, and `Artifact.at_simulated_turn`
 is the 1-based turn (see above). No reader of `at_simulated_turn` exists outside the simulation
 package (**checked**, by grepping `packages/` and `apps/`).
 

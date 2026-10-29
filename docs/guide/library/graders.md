@@ -65,9 +65,15 @@ rest:
 | `metis.library.judge` | Builds the prompt, calls the model, checks the input size, and turns the reply into a result. |
 | `metis.library.judgment_form` | Gives the binary output rules and validates the reply. |
 | `metis.library.aggregation` | Combines the results of a grader that checks several rules. |
-| `metis.core.trace_processing` | Reads the traces: turns, tool calls, errors, and files. |
+| `metis.core.trace_processing` | Reads the traces: recorded turns, tool calls, errors, and files. |
 
 ## Scopes
+
+In this guide, in the `turn` setting, in `turn:N` labels, and in the prompts sent to the judge,
+"turn" means a **recorded turn**: one trace of the target's session, as defined in
+[`GLOSSARY.md`](../../../GLOSSARY.md). It never means a simulated turn, which is one exchange
+in the engine's simulation loop. The prompts keep the bare word because the transcript the
+judge reads has `## Turn N` headings.
 
 The scope decides what one result is about. A grader declares the scopes that it supports.
 A criterion selects one with `grader_args.scope`. When `scope` is not set, the grader uses the
@@ -75,8 +81,8 @@ first scope that it declares.
 
 | Scope | One result is about | Label | Settings |
 |---|---|---|---|
-| `TRACE` | One turn | `"turn:3"` | `turn`: `each` or `last` |
-| `SUBSESSION` | One turn, with the turns before it as context | `"turns:2-4"` | `turn`, and `window` (number of turns) |
+| `TRACE` | One recorded turn | `"turn:3"` | `turn`: `each` or `last` |
+| `SUBSESSION` | One recorded turn, with the recorded turns before it as context | `"turns:2-4"` | `turn`, and `window` (number of recorded turns) |
 | `SESSION` | The whole session | `"session"` | None |
 | `ARTIFACT` | The latest version of one file that the target produced | `"artifact:a.pdf"` | `artifact`: the file name |
 
@@ -103,7 +109,7 @@ give 12 records.
 ### How many results in one record
 
 The select function of the scope sets the count. It returns one entry for each thing to
-judge, and `judge` makes one `GraderResult` for each entry. `turns()` makes one turn for each
+judge, and `judge` makes one `GraderResult` for each entry. `turns()` makes one recorded turn for each
 trace, so for a session of N traces:
 
 | Scope | Setting | Results | Labels |
@@ -111,7 +117,7 @@ trace, so for a session of N traces:
 | `TRACE` | `turn: each` | N | `turn:1` … `turn:N` |
 | `TRACE` | `turn: last` | 1 | `turn:N` |
 | `SUBSESSION` | `turn: each` | N | `turns:1-1` … `turns:1-N` (with `window: 2`: `turns:1-1`, `turns:1-2`, `turns:2-3` …) |
-| `SUBSESSION` | `turn: last` | 1 | `turns:1-N`, or the last `window` turns |
+| `SUBSESSION` | `turn: last` | 1 | `turns:1-N`, or the last `window` recorded turns |
 | `SESSION` | None | 1 | `session` |
 | `ARTIFACT` | `artifact: <name>` | 1 | `artifact:<name>`, the latest version of the file |
 
@@ -122,16 +128,16 @@ and gives 1 result.
 
 There is always at least one result:
 
-- **The session cannot be judged.** This happens when the session has no turns, the named
+- **The session cannot be judged.** This happens when the session has no recorded turns, the named
   file does not exist, or the evidence that the measure needs is missing. The grader returns
   one errored result with no `scope` label.
-- **One entry cannot be judged.** For example, the reply of one turn cannot be read. That
+- **One entry cannot be judged.** For example, the reply of one recorded turn cannot be read. That
   entry gives an errored result with its label. The other entries are still judged.
 - **The grader raises an exception, or returns an empty list.** The engine records one errored
   result in its place.
 
-So the count depends on the scope and the session length. A per-turn grader on a 10-turn
-session gives 10 results, and a session grader gives 1. A report must show the number of
+So the count depends on the scope and the session length. A grader that judges each recorded turn gives 10 results on a session of 10 recorded
+turns, and a session grader gives 1. A report must show the number of
 results beside each rate.
 
 ## Three patterns for grade()
@@ -140,7 +146,7 @@ results beside each rate.
 |---|---|---|
 | One criterion | The code above. | `OutputCorrectnessGrader` |
 | Several rules | Calls `judge` once for each rule, then combines the rule results with `AGGREGATION_DEFINITIONS[self.aggregation]`. | `TaskConstraintAdherenceGrader` |
-| Output against sources | Calls `judge_against_sources`. It adds the earlier turns and the files that the user gave the target. | `ClaimSupportByEvidenceGrader` |
+| Output against sources | Calls `judge_against_sources`. It adds the earlier recorded turns and the files that the user gave the target. | `ClaimSupportByEvidenceGrader` |
 
 The aggregation rules for several rules are these:
 
@@ -167,7 +173,7 @@ The aggregation rules for several rules are these:
 
 Do not read trace or observation fields in a grader. Use `metis.core.trace_processing`:
 
-- `turns(input.traces)` gives one turn for each trace, oldest first.
+- `turns(input.traces)` gives one recorded turn for each trace, oldest first.
 - `render_session` gives the text that the judge reads. It shows the user's message, system
   prompts, model output, sub-agent handoffs, tool calls and their results, errors, and the
   reply, in time order.
@@ -253,7 +259,7 @@ measure that, compare its results with human labels on representative sessions.
 | `TaskConstraintAdherenceGrader` | Several rules combined by `pass_if_all` |
 | `ClaimSupportByEvidenceGrader` | Output against sources |
 | `FormatSchemaComplianceGrader` | A check in code before the judge call, and `check_setup()` |
-| `RelevanceGrader` | `SESSION` by default, or `SUBSESSION` for one result for each turn |
+| `RelevanceGrader` | `SESSION` by default, or `SUBSESSION` for one result for each recorded turn |
 | `ToneAppropriatenessGrader` | Its own render function, `render_dialogue` |
 | `ActionStatusTransparencyGrader` | An errored result before the judge call when the evidence is missing |
 | `demo.DemoTraceBudgetGrader` | A deterministic grader with no judge call |
@@ -266,5 +272,5 @@ measure that, compare its results with human labels on representative sessions.
   not read it.
 - Insights combines the results of one grader run with an equal-weight mean. How results
   combine across trials is not decided yet.
-- A subset of a session other than a run of turns, such as the turns of one sub-agent, needs
+- A subset of a session other than a run of recorded turns, such as the recorded turns of one sub-agent, needs
   a new select function.

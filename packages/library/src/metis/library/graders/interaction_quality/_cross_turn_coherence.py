@@ -43,12 +43,12 @@ class CrossTurnCoherenceArgs(JudgeArgs):
 
 
 class CrossTurnCoherenceGrader(Grader[CrossTurnCoherenceArgs]):
-    """Whether the conversation stays connected from one turn to the next.
+    """Whether the conversation stays connected from one recorded turn to the next.
 
-    Session scope, because coherence is a relation between turns. The judge reads only the
+    Session scope, because coherence is a relation between recorded turns. The judge reads only the
     user messages and the replies, so tool traffic cannot hide a break in the conversation.
     It judges flow and references, not whether recalled facts are accurate, which is Use of
-    prior information. Errored for a session with fewer than two turns.
+    prior information. Errored for a session with fewer than two recorded turns.
     """
 
     args_model = CrossTurnCoherenceArgs
