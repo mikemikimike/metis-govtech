@@ -284,7 +284,7 @@ class TestLogRouter:
         router = LogRouter(log_dir=tmp_path, log_format="text")
         line = router._render_styled(
             {
-                "event": "runner_tool_call",
+                "event": "runner_agent_tool_call",
                 "level": "info",
                 "timestamp": "2026-08-05T10:00:00",
                 "scenario_id": "scn",
@@ -298,7 +298,8 @@ class TestLogRouter:
         )
 
         assert (
-            "runner_tool_call  tool=http_request result=refused detail=" in line.plain
+            "runner_agent_tool_call  tool=http_request result=refused detail="
+            in line.plain
         )
         assert "worker" not in line.plain and "trial_index" not in line.plain
         assert "\n" not in line.plain

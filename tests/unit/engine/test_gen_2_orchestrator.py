@@ -677,7 +677,7 @@ async def test_the_turn_line_holds_the_whole_action_and_reply(tmp_path: Path) ->
     with structlog.testing.capture_logs() as logs:
         await _build(tmp_path, runner, agent).execute()
 
-    (line,) = [e for e in logs if e["event"] == "turn"]
+    (line,) = [e for e in logs if e["event"] == "orchestrator_turn_result"]
     assert line["turn"] == 1
     assert line["action"] == action
     assert line["reply"] == reply
@@ -694,7 +694,7 @@ async def test_the_turn_line_shows_an_action_that_sent_nothing(tmp_path: Path) -
     with structlog.testing.capture_logs() as logs:
         await _build(tmp_path, runner, agent).execute()
 
-    first = [e for e in logs if e["event"] == "turn"][0]
+    first = [e for e in logs if e["event"] == "orchestrator_turn_result"][0]
     assert first["sent_nothing"] is True
     assert first["reply"] is None
     assert "quoted no message" in first["notice"]

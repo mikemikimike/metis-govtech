@@ -315,7 +315,7 @@ async def test_the_decision_line_holds_the_whole_action(tmp_path: Path) -> None:
     with structlog.testing.capture_logs() as logs:
         await agent.decide(1, [], [])
 
-    (line,) = [e for e in logs if e["event"] == "user_agent_decision"]
+    (line,) = [e for e in logs if e["event"] == "user_agent_decided"]
     assert line["turn"] == 1
     assert line["decision"] == "continue"
     assert line["action"] == action

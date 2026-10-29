@@ -433,7 +433,10 @@ class BrowserRunner(Runner):
     async def _attempt(
         self, promised: list[Promise], *, signing_in: bool
     ) -> Observation:
-        state = ActionState(first_result=len(self.results))
+        state = ActionState(
+            first_result=len(self.results),
+            turn="sign_in" if signing_in else self._turn,
+        )
         failures = self.failures
         started = _now()
         limit = min(self._wait + ACT_MARGIN, max(0.0, self._deadline - started))
@@ -487,7 +490,10 @@ class BrowserRunner(Runner):
                 return "the action's time limit passed before the agent reported"
             sent = trimmed_pages(messages)
             logger.debug(
-                "runner_agent_round", round=round_number, chars_sent=sent_chars(sent)
+                "runner_agent_round",
+                turn=state.turn,
+                round=round_number,
+                chars_sent=sent_chars(sent),
             )
             try:
                 completion = await create_completion(

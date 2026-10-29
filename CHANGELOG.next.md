@@ -370,11 +370,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `no_message_quoted`. An action that quoted nothing but never tried to send, such as a file
   fetch, is counted as before (#544).
   The per-trial text log and the TUI tail now show each event's own fields as `key=value` after
-  the event name (the file's name, level and time are not repeated; the tail clips a long line). The runner agent's every tool call is logged
-  as `runner_tool_call` with its tool, result (`ok`, `refused`, `transport_failed`) and a short
-  detail, so a refused submission shows its reason. The orchestrator logs one `turn` line per
-  action with the whole action and reply and its `counted` and `sent_nothing` facts, and the user
-  agent logs `user_agent_decision` with the whole action.
+  the event name (the file's name, level and time are not repeated; the tail clips a long line).
+  Each gen_2 line names who wrote it and carries the turn it belongs to: `user_agent_decided`
+  holds the whole action and reasoning; `runner_agent_round` and `runner_agent_tool_call` (tool,
+  result `ok`, `refused` or `transport_failed`, and a short detail, so a refused submission shows
+  its reason) carry `turn=N`, or `turn=closing` for the closing call and `turn=sign_in` for the
+  browser sign-in; `orchestrator_turn_result` closes each turn with the whole action and reply
+  and the `counted` and `sent_nothing` facts.
   `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is

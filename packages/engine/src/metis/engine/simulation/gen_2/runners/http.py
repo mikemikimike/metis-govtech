@@ -590,7 +590,9 @@ class HttpRunner(Runner):
 
     async def _attempt(self, promised: list[Promise], *, closing: bool) -> Observation:
         """The loop ``act`` and ``end_chat`` share: resume, run the agent, observe."""
-        state = ActionState(first_result=len(self.results))
+        state = ActionState(
+            first_result=len(self.results), turn="closing" if closing else self._turn
+        )
         started = _now()
         limit = min(self._wait + ACT_MARGIN, max(0.0, self._deadline - started))
         try:
@@ -622,7 +624,10 @@ class HttpRunner(Runner):
                 return "the action's time limit passed before the agent reported"
             sent = trimmed(messages)
             logger.debug(
-                "runner_agent_round", round=round_number, chars_sent=sent_chars(sent)
+                "runner_agent_round",
+                turn=state.turn,
+                round=round_number,
+                chars_sent=sent_chars(sent),
             )
             try:
                 completion = await create_completion(

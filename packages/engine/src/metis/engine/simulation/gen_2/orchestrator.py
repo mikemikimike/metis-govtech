@@ -214,7 +214,7 @@ class Orchestrator:
             self._note_promises(observation, turn)
             self._agent.remember(output, observation)
             logger.info(
-                "turn",
+                "orchestrator_turn_result",
                 turn=turn,
                 counted=not observation.sent_nothing,
                 sent_nothing=observation.sent_nothing,

@@ -53,6 +53,8 @@ class ActionState:
 
     first_result: int
     """``len(runner.results)`` when the action began: its entries come after this."""
+    turn: int | str = 0
+    """What the log calls this action: its turn number, or ``closing`` or ``sign_in``."""
     transport_failed: bool = False
     report: Report | None = None
     refusals: list[str] = field(default_factory=list)
@@ -293,18 +295,29 @@ async def run_tool(
             raise ToolRefused("the arguments must be a JSON object")
         result = await handler(runner, state, args)
         logger.debug(
-            "runner_tool_call", tool=name, result="ok", detail=_summary(args, result)
+            "runner_agent_tool_call",
+            turn=state.turn,
+            tool=name,
+            result="ok",
+            detail=_summary(args, result),
         )
         return result
     except (ToolRefused, PointerError) as exc:
         message = f"refused, nothing was sent: {exc}"
         state.refusals.append(f"{name}: {exc}")
-        logger.info("runner_tool_call", tool=name, result="refused", detail=str(exc))
+        logger.info(
+            "runner_agent_tool_call",
+            turn=state.turn,
+            tool=name,
+            result="refused",
+            detail=str(exc),
+        )
         return {"error": message}
     except httpx.TransportError as exc:
         state.transport_failed = True
         logger.info(
-            "runner_tool_call",
+            "runner_agent_tool_call",
+            turn=state.turn,
             tool=name,
             result="transport_failed",
             detail=type(exc).__name__,

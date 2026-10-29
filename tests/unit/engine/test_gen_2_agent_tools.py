@@ -686,7 +686,7 @@ async def test_every_tool_call_is_logged_with_its_outcome(tmp_path: Path) -> Non
         await _chat(runner, state)
         await _call(runner, state, "http_request", {"method": "DELETE", "path": "/x"})
 
-    calls = [e for e in logs if e["event"] == "runner_tool_call"]
+    calls = [e for e in logs if e["event"] == "runner_agent_tool_call"]
     assert [(e["tool"], e["result"]) for e in calls] == [
         ("http_request", "ok"),
         ("http_request", "refused"),
@@ -705,6 +705,6 @@ async def test_a_refusal_for_quoting_nothing_is_logged_with_its_reason(
     with structlog.testing.capture_logs() as logs:
         await _submit(runner, state)
 
-    (call,) = [e for e in logs if e["event"] == "runner_tool_call"]
+    (call,) = [e for e in logs if e["event"] == "runner_agent_tool_call"]
     assert call["result"] == "refused"
     assert "quoted nothing to send" in call["detail"]
