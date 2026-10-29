@@ -107,10 +107,11 @@ In run mode, select **HTTP API** or **Browser**, and enter the required fields. 
 holds the optional fields. Each secret field takes the name of an environment variable, never its
 value. See [Connect the target](../wizard.md#connect-the-target) for the fields.
 
-Select **Test connection** at the bottom of the card. Each check shows with ✓ or ✗. Send uses the
-last test. If you change a field after the test, Send tests the binding again. If the fields are
-not valid, Send marks them and does not start the Interview. Fix the fields, or choose **Build
-Spec only**.
+Select **Test connection** at the bottom of the card. Each passed check shows with ✓. Each problem
+shows in red under the field to fix, such as "APP_API_KEY is not set. Set it in .env." under the
+API key variable. Send uses the last test. If you change a field after the test, Send tests the
+binding again. If the fields are not valid, Send marks them and does not start the Interview. Fix
+the fields, or choose **Build Spec only**.
 
 The API reads your `.env` and reaches the target only when it runs on your computer
 (`make run-api` listens on `127.0.0.1`). An API that other people can reach checks the fields

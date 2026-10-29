@@ -76,7 +76,7 @@ export function ConnectionForm({
   onTest: () => void;
 }) {
   const [more, setMore] = useState(false);
-  const errors = errorsByField(result);
+  const errors = errorsByField(draft, result);
   const set = <K extends keyof ConnectionDraft>(
     key: K,
     value: ConnectionDraft[K],
@@ -270,17 +270,23 @@ export function ConnectionStatusLine({
         Fix the marked fields, or choose Build Spec only.
       </p>
     );
+  // A failed check shows under the field it belongs to, so the list keeps the passed ones.
+  const failed = (result.probes ?? []).some((probe) => !probe.ok);
   return (
     <ul role="status" className="flex flex-col gap-1 text-sm">
       <li className="text-foreground">✓ The fields are valid.</li>
-      {(result.probes ?? []).map((probe) => (
-        <li
-          key={probe.name}
-          className={probe.ok ? "text-foreground" : "text-destructive"}
-        >
-          {probe.ok ? "✓" : "✗"} <code>{probe.name}</code>: {probe.message}
+      {(result.probes ?? [])
+        .filter((probe) => probe.ok)
+        .map((probe) => (
+          <li key={probe.name} className="text-foreground">
+            ✓ <code>{probe.name}</code>: {probe.message}
+          </li>
+        ))}
+      {failed && (
+        <li className="text-destructive">
+          ✗ Some checks failed. Fix the marked fields and test again.
         </li>
-      ))}
+      )}
       {!result.live && (
         <li className="text-muted-foreground">
           This server checks the fields only. Run{" "}

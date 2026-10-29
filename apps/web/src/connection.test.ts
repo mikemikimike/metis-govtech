@@ -64,23 +64,50 @@ test("a browser draft sends the sign-in note and its variable names only", () =>
   });
 });
 
-test("field errors from the API mark the matching draft field", () => {
-  const errors = errorsByField({
+test("each problem from a test shows under the field to fix", () => {
+  const draft: ConnectionDraft = {
+    ...http,
+    specUrl: "${APP_URL}/openapi.json",
+    secretHeaders: "POST /chat X-Api-Key APP_HEADER",
+  };
+  const errors = errorsByField(draft, {
     binding: null,
     errors: [
-      { loc: ["auth", "secret_env"], msg: "String should match pattern" },
+      {
+        loc: ["auth", "secret_env"],
+        msg: "String should match pattern '^[A-Z_][A-Z0-9_]*$'",
+      },
       {
         loc: ["identity", "name"],
         msg: "String should have at least 1 character",
       },
       { loc: [], msg: "Value error, a http binding needs spec_url" },
     ],
-    live: false,
+    live: true,
+    probes: [
+      { name: "APP_KEY", ok: false, message: "not set" },
+      { name: "APP_HEADER", ok: false, message: "not set" },
+      { name: "APP_URL", ok: false, message: "not set" },
+      { name: "server", ok: false, message: "the server did not answer" },
+      {
+        name: "spec_url",
+        ok: true,
+        message: "OpenAPI document: App, 2 endpoints",
+      },
+    ],
     status: "unchecked",
   });
-  assert.equal(errors.secretEnv, "String should match pattern");
+  assert.equal(
+    errors.secretEnv,
+    "Use a variable name in capital letters, digits, and _, such as APP_API_KEY. APP_KEY is not set. Set it in .env.",
+  );
   assert.equal(errors.name, "Required");
-  assert.equal(errors.binding, "Value error, a http binding needs spec_url");
+  assert.equal(errors.secretHeaders, "APP_HEADER is not set. Set it in .env.");
+  assert.equal(
+    errors.specUrl,
+    "APP_URL is not set. Set it in .env. The OpenAPI document loads, but the server did not answer.",
+  );
+  assert.equal(errors.binding, "a http binding needs spec_url");
 });
 
 test("the Interview starts with a connection only in run mode with a valid binding", () => {
