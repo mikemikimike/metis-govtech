@@ -60,7 +60,8 @@ class ArtifactArgs(BaseModel):
     """The setting of the ``artifact`` scope."""
 
     artifact: NonEmptyText | None = None
-    """The name of the file to judge. Each received file with this name is judged on its own."""
+    """The name of the file to judge. When the target revised the file, the judge reads the
+    latest version."""
 
 
 SCOPE_SETTINGS: dict[Scope, type[BaseModel]] = {
