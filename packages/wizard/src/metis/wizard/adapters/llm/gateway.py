@@ -82,6 +82,61 @@ _TRACING_OFF_KEY = "metis-internal-tracing-off"
 T = TypeVar("T", bound=BaseModel)
 
 
+def _strict_schema(node: Any) -> Any:
+    """Return `node` in the form that strict structured output accepts.
+
+    Strict providers such as Azure OpenAI require every property in `required`. A field with a
+    default becomes required and nullable, and the model returns `null` to leave it unset.
+    `_drop_defaulted_nulls` removes those nulls before validation, so Pydantic applies the default.
+    """
+    if isinstance(node, list):
+        return [_strict_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    node = {key: _strict_schema(value) for key, value in node.items()}
+    properties = node.get("properties")
+    if isinstance(properties, dict):
+        required = set(node.get("required", []))
+        for name, prop in properties.items():
+            if name not in required:
+                prop = {key: value for key, value in prop.items() if key != "default"}
+                if not _allows_null(prop):
+                    prop = {"anyOf": [prop, {"type": "null"}]}
+                properties[name] = prop
+        node["required"] = list(properties)
+    return node
+
+
+def _allows_null(node: dict[str, Any]) -> bool:
+    return node.get("type") == "null" or any(
+        branch.get("type") == "null" for branch in node.get("anyOf", [])
+    )
+
+
+def _drop_defaulted_nulls(data: Any, node: dict[str, Any], defs: dict[str, Any]) -> Any:
+    """Remove the nulls that `_strict_schema` lets the model send for defaulted fields."""
+    if "$ref" in node:
+        node = defs[node["$ref"].rsplit("/", 1)[-1]]
+    if isinstance(data, list) and isinstance(node.get("items"), dict):
+        return [_drop_defaulted_nulls(item, node["items"], defs) for item in data]
+    if not isinstance(data, dict):
+        return data
+    if "properties" in node:
+        required = set(node.get("required", []))
+        return {
+            key: _drop_defaulted_nulls(value, node["properties"].get(key, {}), defs)
+            for key, value in data.items()
+            if value is not None or key in required
+        }
+    for branch in node.get("anyOf", []):
+        resolved = (
+            defs[branch["$ref"].rsplit("/", 1)[-1]] if "$ref" in branch else branch
+        )
+        if set(data) <= set(resolved.get("properties", {})):
+            return _drop_defaulted_nulls(data, resolved, defs)
+    return data
+
+
 class CredentialsMissing(InterviewerUnavailable):
     """The gateway is not configured. Raised before any call is attempted."""
 
@@ -236,11 +291,12 @@ class GatewayInterviewer:
         ]
         last_error: Exception | None = None
 
+        model_schema = schema.model_json_schema()
         response_format = {
             "type": "json_schema",
             "json_schema": {
                 "name": schema.__name__,
-                "schema": schema.model_json_schema(),
+                "schema": _strict_schema(model_schema),
                 "strict": True,
             },
         }
@@ -278,10 +334,14 @@ class GatewayInterviewer:
             text = response.choices[0].message.content or ""
 
             try:
-                result = schema.model_validate_json(text)
+                result = schema.model_validate(
+                    _drop_defaulted_nulls(
+                        json.loads(text), model_schema, model_schema.get("$defs", {})
+                    )
+                )
                 if validate is not None:
                     validate(result)
-            except (ValidationError, PatchValueError) as exc:
+            except (ValidationError, PatchValueError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if attempt < ATTEMPTS - 1:
                     # Feed the failure back rather than re-asking blind.

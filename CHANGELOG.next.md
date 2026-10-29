@@ -1017,6 +1017,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Fixed
 
+- **Interviews work with Azure OpenAI models (#614).** The structured-output schema lists every
+  property as required, as Azure strict mode demands. A field that has a default accepts `null`,
+  and the Wizard applies the default when the model sends `null`.
+
 - Fix the type error when a new Interview creates its Specification. Preserve
   the initial Target details and Experiment defaults (#419).
 

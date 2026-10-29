@@ -395,6 +395,46 @@ def test_structured_output_is_requested_strictly() -> None:
     assert schema["type"] == "json_schema"
     assert schema["json_schema"]["strict"] is True
 
+    def objects(node):
+        if isinstance(node, dict):
+            if "properties" in node:
+                yield node
+            for value in node.values():
+                yield from objects(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from objects(value)
+
+    for node in objects(schema["json_schema"]["schema"]):
+        assert node["required"] == list(node["properties"])
+
+
+def test_nulls_for_defaulted_fields_take_the_default() -> None:
+    reply = json.dumps(
+        {
+            "message": "Added a persona.",
+            "done": None,
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "personas",
+                    "value": {
+                        "name": "Ana",
+                        "description": "A tester.",
+                        "metadata": None,
+                    },
+                }
+            ],
+        }
+    )
+    model, _ = interviewer([reply])
+
+    result, recovered = model._ask(simple_prompt(), ClarifyResult)
+
+    assert recovered is False
+    assert result.done is False
+    assert result.patches[0].value.metadata == {}
+
 
 def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
     from metis.wizard.contracts import StepResult
