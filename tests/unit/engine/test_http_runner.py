@@ -10,7 +10,6 @@ import pytest
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation import runner as runner_module
-from metis.engine.simulation import trial as seam
 from metis.engine.simulation.binding import TargetBindingError
 from metis.engine.simulation.runners.http import HttpRunnerFactory
 
@@ -49,10 +48,6 @@ def test_from_specification_without_a_binding_is_an_error(inputs: Path) -> None:
         TargetBindingError, match="needs the specification's target_binding"
     ):
         HttpRunnerFactory.from_specification(specification, inputs)
-
-
-def test_the_factory_runs_on_gen_2(inputs: Path) -> None:
-    assert seam.resolve_generation(_factory(inputs)) is seam._GENERATIONS["gen_2"]
 
 
 def test_retry_defaults_are_the_shared_defaults(inputs: Path) -> None:

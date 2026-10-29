@@ -1,4 +1,4 @@
-"""Persona and scenario text for the user agent's system prompt, shared by gen_1 and gen_2."""
+"""Persona and scenario text for the user agent's system prompt."""
 
 from __future__ import annotations
 

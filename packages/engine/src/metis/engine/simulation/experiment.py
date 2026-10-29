@@ -26,7 +26,7 @@ from .exceptions import TrialRecoverableError
 from .llm_calls import LLMCallLog
 from .model_settings import runner_agent_settings, user_agent_settings
 from .transport_log import TransportLog
-from .trial import create_trial, resolve_generation
+from .trial import create_trial, resolve_fixture_descriptions
 
 if TYPE_CHECKING:
     import threading
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .factory import RunnerFactory
-    from .trial import SimulatorGeneration, Trial
+    from .trial import Trial
     from .types import Persona, Scenario, Specification
 
 
@@ -63,20 +63,15 @@ logger = get_logger()
 
 
 def trial_models(
-    user_agent_model: str | None,
-    runner_agent_model: str | None,
-    *,
-    has_runner_agent: bool,
-) -> dict[str, str | None]:
+    user_agent_model: str | None, runner_agent_model: str | None
+) -> dict[str, str]:
     """The resolved models that a ``TrialConfig`` records."""
     user_agent = user_agent_settings(user_agent_model).model
     return {
         "user_agent_model": user_agent,
         "runner_agent_model": runner_agent_settings(
             runner_agent_model, user_agent_model=user_agent
-        ).model
-        if has_runner_agent
-        else None,
+        ).model,
     }
 
 
@@ -188,10 +183,6 @@ async def _execute_experiment_async(
     # Shared across workers so scenario_started fires exactly once
     started_scenarios: set[str] = set()
 
-    # An unknown generation fails here, before anything starts, not inside an
-    # attempt where the retry loop would try it again.
-    generation = resolve_generation(runner_factory)
-
     # Resolve each undescribed fixture's content_description exactly once, here,
     # before workers fan out — a fixture's content is invariant across scenarios
     # and runs, so it is summarized once per experiment (spec §6), not per run or
@@ -200,12 +191,11 @@ async def _execute_experiment_async(
     all_fixture_names = [name for task in specification.tasks for name in task.fixtures]
     experiment_root = output_dir if output_dir is not None else Path("results")
     defaults = specification.experiment.defaults
-    resolved_fixture_descriptions = await generation.resolve_fixture_descriptions(
+    resolved_fixture_descriptions = await resolve_fixture_descriptions(
         all_fixture_names,
         fixtures_dir,
         experiment_root,
         specification.fixture_content_descriptions,
-        user_agent_model=defaults.user_agent_model,
     )
 
     await runner_factory.start()
@@ -219,7 +209,6 @@ async def _execute_experiment_async(
                     _worker(
                         worker_id=wid,
                         runner_factory=runner_factory,
-                        generation=generation,
                         default_user_agent_model=defaults.user_agent_model,
                         runner_agent_model=defaults.runner_agent_model,
                         experiment_id=specification.id,
@@ -286,7 +275,6 @@ async def _worker(
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
-    generation: SimulatorGeneration | None = None,
     default_user_agent_model: str | None = None,
     runner_agent_model: str | None = None,
     experiment_id: str | None = None,
@@ -464,20 +452,15 @@ async def _worker(
                     **trial_models(
                         scenario.user_agent_model or default_user_agent_model,
                         runner_agent_model,
-                        has_runner_agent=generation is not None
-                        and generation.has_runner_agent,
                     ),
                 )
                 try:
                     trial = create_trial(
-                        runner_factory,
-                        generation=generation,
                         runner=runner,
                         persona=persona,
                         scenario=scenario,
                         trial_config=trial_config,
                         run_dir=run_dir,
-                        fixtures_dir=fixtures_dir,
                         experiment_root=experiment_root,
                         fixture_artifacts=fixture_artifacts,
                         trial_index=trial_index,

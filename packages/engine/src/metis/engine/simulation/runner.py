@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Protocol
-
-from .factory import RunnerFactory
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from metis.core.trials import TrialConfig
 
     from .artifacts import ArtifactLedger
@@ -58,15 +54,3 @@ class Runner(ABC):
     @abstractmethod
     async def teardown(self) -> None:
         """Release what ``setup`` acquired."""
-
-
-class Gen2RunnerFactory(RunnerFactory, Protocol):
-    """A ``RunnerFactory`` whose runners are gen_2 ``Runner``s."""
-
-    generation: ClassVar[str]
-
-    async def create(
-        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
-    ) -> Runner:
-        """Create a fresh gen_2 Runner for one attempt."""
-        ...

@@ -12,29 +12,11 @@ from metis.engine.simulation import trial as seam
 from metis.engine.simulation.artifacts import file_facts
 from metis.engine.simulation.llm_calls import LLMCallLog
 from metis.engine.simulation.orchestrator import Orchestrator
-from metis.engine.simulation.trial import (
-    build_trial,
-    resolve_fixture_descriptions,
-)
+from metis.engine.simulation.trial import resolve_fixture_descriptions
 from metis.engine.simulation.types import Persona, Scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-class _Gen2Factory:
-    generation = "gen_2"
-
-    async def start(self) -> None:
-        pass
-
-    async def create(
-        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
-    ) -> Any:
-        return MagicMock()
-
-    async def close(self) -> None:
-        pass
 
 
 def _kwargs(tmp_path: Path) -> dict[str, Any]:
@@ -44,7 +26,6 @@ def _kwargs(tmp_path: Path) -> dict[str, Any]:
         "scenario": Scenario(id="s1", description="g", persona_refs=["p1"]),
         "trial_config": TrialConfig(persona="p1", scenario="s1"),
         "run_dir": tmp_path / "t1",
-        "fixtures_dir": tmp_path,
         "experiment_root": tmp_path,
         "fixture_artifacts": [],
         "trial_index": 1,
@@ -54,21 +35,12 @@ def _kwargs(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def test_is_registered() -> None:
-    assert "gen_2" in seam._GENERATIONS
-    assert seam._GENERATIONS["gen_2"].build_trial is build_trial
-    assert (
-        seam._GENERATIONS["gen_2"].resolve_fixture_descriptions
-        is resolve_fixture_descriptions
-    )
-
-
-def test_a_gen_2_factory_gets_a_gen_2_trial(
+def test_a_factory_gets_a_trial_built_by_the_orchestrator(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    trial = seam.create_trial(_Gen2Factory(), **_kwargs(tmp_path))
+    trial = seam.create_trial(**_kwargs(tmp_path))
 
     assert isinstance(trial, Orchestrator)
 

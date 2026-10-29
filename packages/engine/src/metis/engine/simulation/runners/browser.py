@@ -23,7 +23,7 @@ import asyncio
 import json
 import re
 import time
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 import openai
 from openai import AsyncOpenAI
@@ -899,8 +899,6 @@ class BrowserRunner(Runner):
 
 class BrowserRunnerFactory:
     """Builds :class:`BrowserRunner`s for the app the specification's browser binding names."""
-
-    generation: ClassVar[str] = "gen_2"
 
     def __init__(
         self,

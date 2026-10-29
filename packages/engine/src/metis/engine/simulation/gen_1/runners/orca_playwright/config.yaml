@@ -1,8 +1,0 @@
-auth:
-  login_button_text: "Log in with WOG AD"
-  userid_button_text: "Log in with user ID"
-  signin_button_text: "Sign in"
-
-timeouts:
-  response_wait_ms: 300000
-  page_load_ms: 10000

@@ -1,4 +1,4 @@
-"""The "run one trial" seam: the runner factory picks the simulator generation."""
+"""The "run one trial" seam between the retry loop and a trial."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
+from metis.core.experiment import ExperimentDefaults
+from metis.core.trials import TrialConfig
 from metis.engine.simulation import experiment as experiment_module
 from metis.engine.simulation import trial as seam
 from metis.engine.simulation.experiment import (
@@ -27,8 +28,6 @@ from metis.engine.simulation.types import Persona, Scenario
 class _Factory:
     """Factory that hands out mock runners and counts how many it made."""
 
-    generation = "gen_2"
-
     def __init__(self) -> None:
         self.created = 0
 
@@ -43,19 +42,6 @@ class _Factory:
 
     async def close(self) -> None:
         pass
-
-
-def _specification(scenario: Scenario, persona: Persona) -> Any:
-    """The attributes the experiment reads before workers start."""
-    from metis.core.experiment import ExperimentDefaults
-
-    return SimpleNamespace(
-        id="test-experiment",
-        scenarios=[scenario],
-        tasks=[],
-        fixture_content_descriptions={},
-        experiment=SimpleNamespace(defaults=ExperimentDefaults()),
-    )
 
 
 @pytest.fixture
@@ -84,7 +70,6 @@ def _trial_kwargs(
         "scenario": scenario,
         "trial_config": TrialConfig(persona="tester", scenario="test-scenario"),
         "run_dir": tmp_path,
-        "fixtures_dir": tmp_path,
         "experiment_root": tmp_path,
         "fixture_artifacts": [],
         "trial_index": 1,
@@ -116,7 +101,7 @@ async def _run_worker(
     )
 
 
-def test_a_factory_gets_a_trial(
+def test_create_trial_builds_the_user_agent_and_the_orchestrator(
     monkeypatch: pytest.MonkeyPatch,
     persona: Persona,
     scenario: Scenario,
@@ -135,7 +120,7 @@ def test_a_factory_gets_a_trial(
     monkeypatch.setattr(seam, "UserAgent", fake_agent)
     monkeypatch.setattr(seam, "Orchestrator", fake_orchestrator)
 
-    trial = create_trial(_Factory(), **_trial_kwargs(persona, scenario, tmp_path))
+    trial = create_trial(**_trial_kwargs(persona, scenario, tmp_path))
 
     assert trial == "orch"
     assert built["agent"] == {
@@ -159,32 +144,6 @@ def test_a_factory_gets_a_trial(
     }
     assert built["orch"]["agent"] == "agent"
     assert built["orch"]["runner"] == "runner"
-
-
-def test_unknown_generation_raises(
-    persona: Persona, scenario: Scenario, tmp_path: Path
-) -> None:
-    class _Gen9Factory(_Factory):
-        generation = "gen_9"
-
-    with pytest.raises(ValueError, match=r"'gen_9'.*supported:.*'gen_2'"):
-        create_trial(_Gen9Factory(), **_trial_kwargs(persona, scenario, tmp_path))
-
-
-def test_generation_is_read_from_the_factory_class(
-    monkeypatch: pytest.MonkeyPatch,
-    persona: Persona,
-    scenario: Scenario,
-    tmp_path: Path,
-) -> None:
-    # An instance attribute is not a declaration: the seam reads the class, so a
-    # mock factory that answers any attribute name cannot pick a generation.
-    monkeypatch.setattr(seam, "UserAgent", lambda **_kw: "agent")
-    monkeypatch.setattr(seam, "Orchestrator", lambda **_kw: "orch")
-    factory = _Factory()
-    factory.generation = "gen_9"
-
-    assert create_trial(factory, **_trial_kwargs(persona, scenario, tmp_path)) == "orch"
 
 
 @pytest.mark.asyncio
@@ -229,100 +188,39 @@ async def test_trial_construction_failure_retries_with_empty_record(
     assert record.prior_failures[0].error_message == "bad persona"
 
 
-def test_registered_generation_gets_its_own_trial(
-    monkeypatch: pytest.MonkeyPatch,
-    persona: Persona,
-    scenario: Scenario,
-    tmp_path: Path,
-) -> None:
-    seen: dict[str, Any] = {}
-    other_trial = _Done()
-
-    def build(**kwargs: Any) -> Any:
-        seen.update(kwargs)
-        return other_trial
-
-    monkeypatch.setitem(
-        seam._GENERATIONS,
-        "other",
-        seam.SimulatorGeneration(
-            build_trial=build, resolve_fixture_descriptions=AsyncMock()
-        ),
-    )
-
-    class _OtherFactory(_Factory):
-        generation = "other"
-
-    trial = create_trial(_OtherFactory(), **_trial_kwargs(persona, scenario, tmp_path))
-
-    assert trial is other_trial
-    assert seen["runner"] == "runner"
-
-
-def test_unknown_generation_error_lists_registered_generations(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _BadFactory(_Factory):
-        generation = "gen_9"
-
-    with pytest.raises(ValueError, match=r"'gen_9'.*_BadFactory.*supported:.*'gen_2'"):
-        seam.resolve_generation(_BadFactory())
-
-
 @pytest.mark.asyncio
-async def test_unknown_generation_fails_before_factory_starts_or_workers_run(
-    persona: Persona, scenario: Scenario, tmp_path: Path
-) -> None:
-    class _Gen9Factory(_Factory):
-        generation = "gen_9"
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.started = False
-
-        async def start(self) -> None:
-            self.started = True
-
-    factory = _Gen9Factory()
-
-    with pytest.raises(ValueError, match="'gen_9'"):
-        await _execute_experiment_async(
-            factory,
-            _specification(scenario, persona),
-            {persona.id: persona},
-            tmp_path / "fixtures",
-            [TrialPlanItem(scenario, persona, 1)],
-            output_dir=tmp_path,
-        )
-
-    assert not factory.started
-    assert factory.created == 0
-
-
-@pytest.mark.asyncio
-async def test_generation_is_checked_once_before_workers_start(
+async def test_experiment_resolves_descriptions_once_before_workers_start(
     monkeypatch: pytest.MonkeyPatch,
     persona: Persona,
     scenario: Scenario,
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
-    real = seam.resolve_generation
+    resolver = AsyncMock(return_value={"a.csv": "described"})
 
-    def counting(factory: Any) -> Any:
+    async def counting(*args: Any, **kwargs: Any) -> dict[str, str]:
         events.append("resolve")
-        return real(factory)
+        return await resolver(*args, **kwargs)
 
-    async def fake_worker(**_kwargs: Any) -> list[Any]:
+    async def fake_worker(**kwargs: Any) -> list[Any]:
         events.append("worker")
+        assert kwargs["fixture_content_descriptions"] == {"a.csv": "described"}
         return []
 
-    monkeypatch.setattr(experiment_module, "resolve_generation", counting)
+    monkeypatch.setattr(experiment_module, "resolve_fixture_descriptions", counting)
     monkeypatch.setattr(experiment_module, "_worker", fake_worker)
+    specification = SimpleNamespace(
+        id="test-experiment",
+        scenarios=[scenario],
+        tasks=[],
+        fixture_content_descriptions={},
+        experiment=SimpleNamespace(defaults=ExperimentDefaults()),
+    )
     plan = [TrialPlanItem(scenario, persona, i) for i in (1, 2, 3)]
+
     await _execute_experiment_async(
         _Factory(),
-        _specification(scenario, persona),
+        specification,
         {persona.id: persona},
         tmp_path / "fixtures",
         plan,
@@ -331,93 +229,4 @@ async def test_generation_is_checked_once_before_workers_start(
     )
 
     assert events == ["resolve", "worker", "worker", "worker"]
-
-
-@pytest.mark.asyncio
-async def test_experiment_resolves_descriptions_through_the_generation(
-    monkeypatch: pytest.MonkeyPatch,
-    persona: Persona,
-    scenario: Scenario,
-    tmp_path: Path,
-) -> None:
-    resolver = AsyncMock(return_value={"a.csv": "described"})
-    monkeypatch.setitem(
-        seam._GENERATIONS,
-        "other",
-        seam.SimulatorGeneration(
-            build_trial=lambda **_kw: _Done(), resolve_fixture_descriptions=resolver
-        ),
-    )
-    given: dict[str, Any] = {}
-
-    async def fake_worker(**kwargs: Any) -> list[Any]:
-        given.update(kwargs)
-        return []
-
-    monkeypatch.setattr(experiment_module, "_worker", fake_worker)
-
-    class _OtherFactory(_Factory):
-        generation = "other"
-
-    await _execute_experiment_async(
-        _OtherFactory(),
-        _specification(scenario, persona),
-        {persona.id: persona},
-        tmp_path / "fixtures",
-        [TrialPlanItem(scenario, persona, 1)],
-        output_dir=tmp_path,
-    )
-
     resolver.assert_awaited_once()
-    assert given["fixture_content_descriptions"] == {"a.csv": "described"}
-
-
-class _Done:
-    """A trial that finishes at once with a minimal record."""
-
-    async def execute(self) -> Any:
-        return TrialRecord(
-            config=TrialConfig(persona="tester", scenario="test-scenario"),
-            outcome=TrialOutcome(
-                stop_reason="goal_achieved",
-                simulated_turns_completed=0,
-                duration_seconds=0.0,
-            ),
-        )
-
-    def partial_record(self, stop_reason: str) -> Any:
-        raise AssertionError("not reached")
-
-
-@pytest.mark.asyncio
-async def test_attempts_use_the_generation_the_experiment_resolved(
-    monkeypatch: pytest.MonkeyPatch,
-    persona: Persona,
-    scenario: Scenario,
-    tmp_path: Path,
-) -> None:
-    looked_up: list[Any] = []
-    monkeypatch.setattr(
-        seam, "resolve_generation", lambda f: looked_up.append(f) or None
-    )
-    built = []
-    generation = seam.SimulatorGeneration(
-        build_trial=lambda **kw: built.append(kw) or _Done(),
-        resolve_fixture_descriptions=AsyncMock(),
-    )
-
-    await _worker(
-        worker_id=0,
-        runner_factory=_Factory(),
-        generation=generation,
-        worker_trials=[TrialPlanItem(scenario, persona, 1)],
-        experiment_root=tmp_path,
-        fixtures_dir=tmp_path / "fixtures",
-        fixture_content_descriptions={},
-        console_lock=asyncio.Lock(),
-        started_scenarios=set(),
-        trial_max_retries=0,
-        trial_retry_delay_seconds=0,
-    )
-
-    assert built and not looked_up

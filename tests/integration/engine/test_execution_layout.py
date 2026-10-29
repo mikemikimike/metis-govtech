@@ -61,8 +61,6 @@ class FileRunner(Runner):
 
 
 class FileRunnerFactory:
-    generation = "gen_2"
-
     @property
     def retry_defaults(self) -> tuple[int, float]:
         return (0, 0.0)

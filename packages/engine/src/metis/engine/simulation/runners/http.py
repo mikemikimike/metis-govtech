@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from json import loads
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
@@ -847,8 +847,6 @@ def _retry_after(response: httpx.Response) -> float:
 
 class HttpRunnerFactory:
     """Builds :class:`HttpRunner`s for the app the specification's target binding names."""
-
-    generation: ClassVar[str] = "gen_2"
 
     def __init__(
         self,

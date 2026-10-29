@@ -1,6 +1,6 @@
-"""gen_2's turn loop: the user agent says one action, the runner carries it out.
+"""The turn loop: the user agent says one action, the runner carries it out.
 
-The stop reasons are gen_1's. Each turn is one user-agent decision and one ``Runner.act``,
+Each turn is one user-agent decision and one ``Runner.act``,
 numbered from 1. After the loop the orchestrator calls ``Runner.end_chat`` once, unless
 the trial was interrupted, the session was spent, or the user agent failed; that closing
 call is not a turn and is not in ``simulated_turns_completed``. Nor is an action that sent nothing
@@ -53,7 +53,7 @@ _MAX_EMPTY_ACTIONS = 3
 
 
 def _undelivered_notice(exc: Exception) -> str:
-    """What the user is told when a turn did not complete, as gen_1 words it."""
+    """What the user is told when a turn did not complete, worded for the user agent."""
     if isinstance(exc, ResponseTimeoutError):
         return "Response timeout — no response received"
     return (

@@ -57,8 +57,6 @@ class MockRunner(Runner):
 class MockRunnerFactory:
     """Factory that returns MockRunners without needing Playwright."""
 
-    generation = "gen_2"
-
     def __init__(self) -> None:
         self.started = False
         self.runners_created: list[MockRunner] = []

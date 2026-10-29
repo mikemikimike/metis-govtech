@@ -7,26 +7,31 @@ from pathlib import Path
 import pytest
 
 from metis.core.trials import TrialConfig
-from metis.engine.simulation.gen_1.runner import Runner, RunnerFactory
-from metis.engine.simulation.gen_1.types import ChosenAction, Observation
+from metis.engine.simulation.factory import RunnerFactory
+from metis.engine.simulation.runner import Runner
+from metis.engine.simulation.types import Observation, Promise, Reading
 
 
 class FakeRunner(Runner):
     """Minimal Runner for testing."""
 
+    @property
+    def session_id(self) -> str | None:
+        return None
+
     async def setup(self, config: TrialConfig) -> None:
         pass
 
-    async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
         return Observation(
-            text="ok", artifacts=[], available_actions=[], status_labels=[]
+            reply="ok", reading=Reading(outcome="completed", why="A fake reply.")
         )
+
+    async def end_chat(self, promised: list[Promise]) -> None:
+        pass
 
     async def teardown(self) -> None:
         pass
-
-    async def get_session_id(self) -> str | None:
-        return None
 
 
 class FakeRunnerFactory:

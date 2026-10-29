@@ -1,6 +1,6 @@
 """An append-only log of every request and response a simulation sends.
 
-``gen_2``'s runner agent decides how to act, but code owns every fact in the record:
+The runner agent decides how to act, but code owns every fact in the record:
 the reply, the session ID and each file are copied from a logged entry, never from the
 agent's account. This module is where those entries are written. A trial's log goes to
 ``outputs/trials/<id>/evidence/log.jsonl``.
@@ -17,7 +17,7 @@ points to it. A body that is a downloaded artifact is not copied at all: the ent
 the artifact's path and digest (:class:`ArtifactRef`), so the bytes live once.
 
 The entry model is private to ``metis-engine``: nothing outside the engine reads the
-file yet, and ``gen_1`` is not wired to it.
+file yet.
 """
 
 from __future__ import annotations

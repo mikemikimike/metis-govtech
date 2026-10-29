@@ -1,9 +1,8 @@
 """The one place a simulation records a file, and the facts it tells the user agent.
 
-``gen_2``'s runners decide what to fetch or send; this module records the result, so the
-checks that keep an LLM-driven runner honest run in one place and not once per runner.
-It writes METIS's own :class:`metis.core.Artifact`, unchanged, and is shared: ``gen_1``
-is not wired to it.
+A runner decides what to fetch or send; this module records the result, so the checks that
+keep an LLM-driven runner honest run in one place and not once per runner. It writes METIS's
+own :class:`metis.core.Artifact`, unchanged.
 
 :class:`ArtifactLedger` guarantees that
 

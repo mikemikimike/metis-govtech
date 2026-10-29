@@ -1,11 +1,6 @@
 """Tests for run-level retry logic in _worker."""
 
-import pytest
-
-pytest.importorskip("playwright")
-
 from metis.core.trials import TrialFailure, TrialRecord
-from metis.engine.simulation.gen_1.runners.orca_playwright._config import RetryConfig
 
 
 class TestRunRetryBehavior:
@@ -55,12 +50,6 @@ class TestRunRetryBehavior:
         assert record.max_allowed_attempts == 3
         assert len(record.prior_failures) == 2
         assert record.prior_failures[0].failure_type == "auth_loss"
-
-    def test_retry_config_default_budget(self) -> None:
-        config = RetryConfig()
-        # max_attempts = 1 initial + trial_max_retries
-        max_attempts = 1 + config.trial_max_retries
-        assert max_attempts == 3
 
     def test_scenario_override_respected(self) -> None:
         from metis.engine.simulation.types import Scenario
