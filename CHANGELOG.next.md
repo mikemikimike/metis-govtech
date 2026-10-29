@@ -178,6 +178,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **`Artifact.at_turn` is now `at_simulated_turn`.** The number is the turn METIS's own
+  simulation loop was on, counted from 1. It is not a position among the target's traces,
+  because METIS cannot tell which trace produced a file. A saved `record.json` that still has
+  an `at_turn` key loads, but the value is dropped and `at_simulated_turn` is `None`.
+
 - **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A
   `browser` binding has a `start_url` and an optional `login` (`note`, the sign-in steps in
   plain words, and `secrets`, the environment variables it types), and `spec_url` is
@@ -677,6 +682,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   answer, still ends the trial as a `system_error` without a retry (#401).
 
 #### Changed
+
+- **`run-manifest.json` names each file's turn `at_simulated_turn`** (was `at_turn`), after the
+  `Artifact` field it comes from. See `metis-core`.
 
 - **`metis engine simulate`/`run` default `--concurrency` to `1`.** Omitting the flag now runs
   trials sequentially instead of with 5 parallel workers.
