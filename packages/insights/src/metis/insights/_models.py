@@ -32,7 +32,7 @@ class Trial(BaseModel):
     stopReason: str
     message: str
     failureSource: str
-    total_turns: int
+    simulated_turns_completed: int
     duration: float | None = None
     attempt: int = 1
     conversation: list[ConversationTurn] = Field(default_factory=list)

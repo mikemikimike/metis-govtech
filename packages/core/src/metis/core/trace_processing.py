@@ -1,7 +1,8 @@
 """The trace processor: the one place graders go to read a session, select what to judge, and
 render it for the judge.
 
-A grader judges a session in pieces: each turn, a run of turns, the whole session, or one file.
+A grader judges a session in pieces: each recorded turn, a run of recorded turns, the whole
+session, or one file. A recorded turn is one trace, as defined in ``GLOSSARY.md``.
 It calls the select function for its scope, which returns each piece under the label of its
 result, then renders each piece with a render function and sends that to its judge. Nothing
 outside this module reads an observation's ``input``, ``output`` or ``metadata``; those hold
@@ -11,17 +12,17 @@ whatever the application sent.
 What a grader needs                           Use
 ============================================  ===================================================
 **1. Read the session**
-The turns: messages, tool calls, reply        ``turns(input.traces)``
+The recorded turns: messages, calls, reply    ``turns(input.traces)``
 The files the target produced                 ``find_artifacts(input, name)``
 The files the user gave the target            ``find_fixtures(input)``
 The tools each agent had                      ``tools_offered(input.traces)``
 **2. Select what to judge**
-Each turn on its own (trace scope)            ``select_by_turn(turns, last_only=...)``
-A turn and turns before it (subsession)       ``select_by_window(turns, size, last_only=...)``
+Each recorded turn on its own (trace scope)   ``select_by_turn(turns, last_only=...)``
+A recorded turn and those before it           ``select_by_window(turns, size, last_only=...)``
 The whole session (session scope)             ``select_session(turns)``
 The latest revision of a file (artifact)      ``select_by_artifact(input, name)``
 **3. Render it for the judge**
-Turns: everything the trace records          ``render_session(turns, tool_results=...)``
+Turns: everything the trace records           ``render_session(turns, tool_results=...)``
 Turns: only what the user reads               ``render_dialogue(turns, assistant_only=...)``
 A file                                        ``render_artifact(path)``
 **4. Read one payload in detail**
@@ -33,16 +34,16 @@ A tool call's arguments or result             ``tool_arguments(call)``, ``tool_r
 Each select function returns a ``dict`` from label to what the judge reads. The label becomes
 ``GraderResult.scope``:
 
-======================  ====================  ===============================  ==================
-Scope                   Select                One entry, label: value          Render
-======================  ====================  ===============================  ==================
-trace                   ``select_by_turn``    ``"turn:3"``: that one turn      ``render_session``
-subsession              ``select_by_window``  ``"turns:2-4"``: those turns     ``render_session``
-session                 ``select_session``    ``"session"``: every turn        ``render_session``
-artifact                ``select_by_artifact``  ``"artifact:a.pdf"``: a path    ``render_artifact``
-======================  ====================  ===============================  ==================
+==========  ======================  ==========================================  ==================
+Scope       Select                  One entry, label: value                     Render
+==========  ======================  ==========================================  ==================
+trace       ``select_by_turn``      ``"turn:3"``: that recorded turn            ``render_session``
+subsession  ``select_by_window``    ``"turns:2-4"``: those recorded turns       ``render_session``
+session     ``select_session``      ``"session"``: every recorded turn          ``render_session``
+artifact    ``select_by_artifact``  ``"artifact:a.pdf"``: a path                ``render_artifact``
+==========  ======================  ==========================================  ==================
 
-A grader that judges one turn with every turn before it as context uses
+A grader that judges one recorded turn with every recorded turn before it as context uses
 ``select_by_window(turns, size=None)``. A grader that needs another view of the same turns, such
 as ``render_dialogue``, calls that render function itself.
 
@@ -238,9 +239,9 @@ class OfferedTool(BaseModel, frozen=True):
 
 
 def turns(traces: Sequence[Trace]) -> tuple[Turn, ...]:
-    """Every turn in the session, oldest first, including turns where the target failed.
+    """Every recorded turn in the session, oldest first, including those where the target failed.
 
-    One trace is one turn. Each ``Turn`` holds the user's message, every tool call, the reply,
+    One trace is one recorded turn. Each ``Turn`` holds the user's message, every tool call, the reply,
     and each error the target reported.
     """
     return tuple(_turn(index, trace) for index, trace in enumerate(traces))

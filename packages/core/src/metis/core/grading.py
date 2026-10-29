@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class GraderResult(BaseModel):
-    """What a grader reports for one thing it judged: a turn, a run of turns, the session or a
-    file."""
+    """What a grader reports for one thing it judged: a recorded turn, a run of recorded turns,
+    the session or a file."""
 
     status: Literal["scored", "skipped", "errored"]
     score: float | None = Field(default=None, ge=0, le=1)

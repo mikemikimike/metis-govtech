@@ -63,7 +63,7 @@ class ClarificationAppropriatenessArgs(JudgeArgs):
 class ClarificationAppropriatenessGrader(Grader[ClarificationAppropriatenessArgs]):
     """Whether the assistant asks the clarifying questions it needs, and no others.
 
-    Session scope, so that a pattern such as a question in every turn is visible. The judge
+    Session scope, so that a pattern such as a question in every recorded turn is visible. The judge
     sees the tool calls too, because a form or option list that a tool sets up is also a
     question to the user. A question caused by an inability to proceed is Appropriate
     handling of capability limits, not this measure.

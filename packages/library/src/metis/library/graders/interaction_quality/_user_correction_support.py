@@ -76,9 +76,9 @@ class UserCorrectionSupportArgs(JudgeArgs):
 class UserCorrectionSupportGrader(Grader[UserCorrectionSupportArgs]):
     """Whether the assistant accepts and applies the user's corrections and overrides.
 
-    Session scope, because a correction is applied, or undone, in the turns after it. The
+    Session scope, because a correction is applied, or undone, in the recorded turns after it. The
     judge first finds the corrections, then checks the assistant's replies and tool calls
-    after each one. The result is errored for a session with fewer than two turns, or when
+    after each one. The result is errored for a session with fewer than two recorded turns, or when
     the judge finds no correction. The method draws on the resolved and unresolved outcomes
     of MLflow UserFrustration, but it judges what the assistant did, not how the user felt.
     """

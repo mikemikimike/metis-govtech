@@ -220,7 +220,7 @@ async def test_trial_construction_failure_retries_with_empty_record(
 
     assert factory.created == 2
     assert record.outcome.stop_reason == "system_error"
-    assert record.outcome.total_turns == 0
+    assert record.outcome.simulated_turns_completed == 0
     assert record.attempt_number == 2
     assert record.max_allowed_attempts == 2
     assert [f.failure_type for f in record.prior_failures] == [
@@ -382,7 +382,9 @@ class _Done:
         return TrialRecord(
             config=TrialConfig(persona="tester", scenario="test-scenario"),
             outcome=TrialOutcome(
-                stop_reason="goal_achieved", total_turns=0, duration_seconds=0.0
+                stop_reason="goal_achieved",
+                simulated_turns_completed=0,
+                duration_seconds=0.0,
             ),
         )
 

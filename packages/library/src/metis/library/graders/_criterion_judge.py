@@ -27,7 +27,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
     """Assess the recorded session against a criterion description with a binary score.
 
     The judge reads the whole session, with each tool call's arguments and result in full. A
-    session with no turns is errored without a judge call.
+    session with no recorded turns is errored without a judge call.
     """
 
     args_model = CriterionJudgeArgs

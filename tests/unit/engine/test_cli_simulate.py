@@ -104,7 +104,7 @@ def _write_record(
     record = TrialRecord(
         config=TrialConfig(persona="alice", scenario="task-1"),
         outcome=TrialOutcome(
-            stop_reason=stop_reason, total_turns=1, duration_seconds=1.0
+            stop_reason=stop_reason, simulated_turns_completed=1, duration_seconds=1.0
         ),
     )
     path = experiment_dir / "outputs" / "trials" / folder / "record.json"

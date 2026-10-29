@@ -108,7 +108,7 @@ def _make_canned_record(scenario: Scenario, persona: Persona) -> TrialRecord:
         target_session_id="sess-mock-123",
         outcome=TrialOutcome(
             stop_reason="goal_achieved",
-            total_turns=1,
+            simulated_turns_completed=1,
             duration_seconds=0.1,
         ),
         artifacts=[],
@@ -221,7 +221,7 @@ def _partial_record(
         target_session_id="sess-partial",
         outcome=TrialOutcome(
             stop_reason=stop_reason,
-            total_turns=turns,
+            simulated_turns_completed=turns,
             duration_seconds=1.0,
         ),
         artifacts=[],
@@ -272,9 +272,9 @@ class TestWorkerUnexpectedCrash:
 
         assert len(records) == 1
         assert records[0].outcome.stop_reason == "system_error"
-        assert records[0].outcome.total_turns == 3  # preserved, not 0
+        assert records[0].outcome.simulated_turns_completed == 3  # preserved, not 0
         assert len(records[0].prior_failures) == 1
-        assert records[0].prior_failures[0].turn_reached == 3
+        assert records[0].prior_failures[0].simulated_turns_completed == 3
         assert records[0].prior_failures[0].failure_type == "RuntimeError"
 
     @pytest.mark.asyncio
@@ -324,7 +324,7 @@ class TestWorkerUnexpectedCrash:
         assert records[0].attempt_number == 2
         assert records[0].max_allowed_attempts == 2
         assert len(records[0].prior_failures) == 1
-        assert records[0].prior_failures[0].turn_reached == 2
+        assert records[0].prior_failures[0].simulated_turns_completed == 2
 
     @pytest.mark.asyncio
     async def test_crash_before_orchestrator_built_falls_back_to_empty(
@@ -363,7 +363,7 @@ class TestWorkerUnexpectedCrash:
 
         assert len(records) == 1
         assert records[0].outcome.stop_reason == "system_error"
-        assert records[0].outcome.total_turns == 0
+        assert records[0].outcome.simulated_turns_completed == 0
 
     @pytest.mark.asyncio
     async def test_crash_is_logged_with_traceback(
@@ -455,9 +455,9 @@ class TestWorkerUnexpectedCrash:
 
         assert len(records) == 1
         assert records[0].outcome.stop_reason == "system_error"
-        assert records[0].outcome.total_turns == 3  # preserved, not 0
+        assert records[0].outcome.simulated_turns_completed == 3  # preserved, not 0
         assert len(records[0].prior_failures) == 1
-        assert records[0].prior_failures[0].turn_reached == 3
+        assert records[0].prior_failures[0].simulated_turns_completed == 3
 
 
 class TestFixtureContentDescriptions:
@@ -739,7 +739,9 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
             return TrialRecord(
                 config=TrialConfig(persona="p", scenario="s"),
                 outcome=TrialOutcome(
-                    stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+                    stop_reason="goal_achieved",
+                    simulated_turns_completed=1,
+                    duration_seconds=1.0,
                 ),
             )
 
@@ -1031,7 +1033,9 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         record = TrialRecord(
             config=kwargs["trial_config"],
             outcome=TrialOutcome(
-                stop_reason="goal_achieved", total_turns=1, duration_seconds=0.1
+                stop_reason="goal_achieved",
+                simulated_turns_completed=1,
+                duration_seconds=0.1,
             ),
         )
         return MagicMock(execute=AsyncMock(return_value=record))

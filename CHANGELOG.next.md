@@ -183,6 +183,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   because METIS cannot tell which trace produced a file. A saved `record.json` that still has
   an `at_turn` key loads, but the value is dropped and `at_simulated_turn` is `None`.
 
+- **`TrialOutcome.total_turns` and `TrialFailure.turn_reached` are now
+  `simulated_turns_completed`.** Both count the simulated turns that finished, so a crash
+  during turn 3 records 2. `TrialFailure` and its fields are documented. A saved `record.json`
+  that still has the old keys no longer loads, because the new field is required. Run the
+  simulation again.
+
 - **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A
   `browser` binding has a `start_url` and an optional `login` (`note`, the sign-in steps in
   plain words, and `secrets`, the environment variables it types), and `spec_url` is
@@ -540,7 +546,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   An action whose runner tried to submit or type but was refused because the action quoted no
   `⟦…⟧` message sets `Observation.sent_nothing` (code decides it, never the runner agent) and
   a notice saying so. Reads the runner agent made first, such as a health check or opening the
-  session, do not change that. It is not a turn: the orchestrator leaves it out of `total_turns`
+  session, do not change that. It is not a turn: the orchestrator leaves it out of `simulated_turns_completed`
   and the `max_turns` budget, the user agent is shown the notice, and three such actions in a row
   end the trial as a `system_error` with failure source `user_agent` and message
   `no_message_quoted`. Every field of the user agent's output now carries a description in the
@@ -670,7 +676,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   delivered are listed. Its calls go through `parse_completion` into the trial's LLM-call log.
   The turn loop uses `gen_1`'s stop reasons and numbers `at_simulated_turn` from 1. Each turn updates
   the progress display, and a set `shutdown_event` ends the trial as `interrupted`. After the
-  last turn it calls `end_chat` once. That call is not a turn and is not in `total_turns`.
+  last turn it calls `end_chat` once. That call is not a turn and is not in `simulated_turns_completed`.
   Errors behave as in `gen_1`, so the retry loop's partial record keeps the turns, artifacts
   and session ID so far. The record is the same `TrialRecord`, with one artifact per fixture.
   `gen_2` describes fixtures with `file_facts`, so no LLM call is made for them, and an
@@ -837,7 +843,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `TrialRecord.conversation` is removed, along with the `ConversationTurn`, `TurnDiagnostics`
   and `ActionRetry` models, so `record.json` no longer holds a copy of the transcript. The
   conversation is read from the Langfuse session named by `target_session_id`.
-  `TrialOutcome.total_turns` still counts completed exchanges. A `record.json` that still has a
+  `TrialOutcome.simulated_turns_completed` still counts completed exchanges. A `record.json` that still has a
   `conversation` key loads, with the key ignored (`schema_version` is unchanged). Per-turn detail
   that only METIS sees and Langfuse does not (the persona's UI actions, withheld or undelivered
   action rows, and `Observation.discarded_message`) is now only in the trial's `logs/`. The
@@ -884,9 +890,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Each trial tab shows the conversation saved in `outputs/traces/<session_id>.json` (#503).
 
 - The report page counts only recorded turns, the turns the graders judge. A trial's ending
-  gives the number of conversation rows, and the page no longer shows `total_turns`, which
-  counts simulated turns. `report.json` keeps `total_turns`, and its trials no longer have
-  `turnCountNote` (#621).
+  gives the number of conversation rows, and the page no longer shows the count of simulated
+  turns. `report.json` trials name that count `simulated_turns_completed`, as the trial record
+  does, and no longer have `turnCountNote` (#621).
 
 - Use Target in report JSON, failure sources, and report labels (#429).
 

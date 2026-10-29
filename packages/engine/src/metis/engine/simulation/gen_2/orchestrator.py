@@ -3,7 +3,7 @@
 The stop reasons are gen_1's. Each turn is one user-agent decision and one ``Runner.act``,
 numbered from 1. After the loop the orchestrator calls ``Runner.end_chat`` once, unless
 the trial was interrupted, the session was spent, or the user agent failed; that closing
-call is not a turn and is not in ``total_turns``. Nor is an action that sent nothing
+call is not a turn and is not in ``simulated_turns_completed``. Nor is an action that sent nothing
 because it quoted no message (``Observation.sent_nothing``); the user agent is told, and
 the trial ends after three of them in a row.
 """
@@ -151,7 +151,7 @@ class Orchestrator:
             target_session_id=self._session_id,
             outcome=TrialOutcome(
                 stop_reason=stop_reason,
-                total_turns=self._turns,
+                simulated_turns_completed=self._turns,
                 duration_seconds=round(time.time() - self._start, 1),
                 failure_source=source,
                 failure_message=message,

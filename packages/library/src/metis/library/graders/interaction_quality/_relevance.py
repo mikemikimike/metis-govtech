@@ -69,9 +69,9 @@ class RelevanceArgs(JudgeArgs, SubsessionArgs):
 class RelevanceGrader(Grader[RelevanceArgs]):
     """Whether the assistant's replies address what the user needs.
 
-    At session scope, by default, one holistic verdict: a few off-target turns can still pass
-    when the conversation as a whole stays on the user's needs. At subsession scope, one
-    verdict for each turn, judged with the turns before it. Relevance only, not truth,
+    At session scope, by default, one holistic verdict: a few off-target recorded turns can still
+    pass when the conversation as a whole stays on the user's needs. At subsession scope, one
+    verdict for each recorded turn, judged with the recorded turns before it. Relevance only, not truth,
     completeness or task success.
     """
 
