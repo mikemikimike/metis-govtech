@@ -218,7 +218,15 @@ class LogRouter:
         if scenario_id and persona_id:
             output.append(f"[{scenario_id}:{persona_id}] ", style="dim cyan")
         output.append(event)
+        if fields := self._fields(event_dict):
+            output.append(f"  {' '.join(fields.split())}", style="dim")
         return output
+
+    def _fields(self, event_dict: EventDict) -> str:
+        """The event's own ``key=value`` pairs, without what the line already shows."""
+        return " ".join(
+            f"{k}={v}" for k, v in event_dict.items() if k not in _NOT_IN_FILE_LINE
+        )
 
     def _format_file_line(self, event_dict: EventDict) -> str:
         """Format a line for per-trial log files (plain text or JSON)."""
@@ -231,10 +239,7 @@ class LogRouter:
         level = event_dict.get("level", "info").upper()
         event = event_dict.get("event", "")
         line = f"[{timestamp}] [{level:<8}] {event}"
-        fields = " ".join(
-            f"{k}={v}" for k, v in event_dict.items() if k not in _NOT_IN_FILE_LINE
-        )
-        if fields:
+        if fields := self._fields(event_dict):
             line += f"  {fields}"
         exception = event_dict.get("exception")
         return f"{line}\n{exception}" if exception else line

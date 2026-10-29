@@ -717,8 +717,7 @@ class HttpRunner(Runner):
                 f"Your message got an error response (status {rejected.status}): "
                 f"{rejected.excerpt}"
             )
-        unquoted, self.unquoted = self.unquoted, False  # read once
-        sent_nothing = unquoted and len(self.results) == state.first_result
+        sent_nothing, self.unquoted = self.unquoted, False  # read once
         if sent_nothing:
             notices.append("Nothing was sent: your action quoted no message.")
         if self.open_submission is not None:

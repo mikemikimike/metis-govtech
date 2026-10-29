@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import re
 from pathlib import Path
 from typing import Any
 
 import structlog
+from rich.console import Console
 
 from metis.core.logging import configure_logging, get_logger
 from metis.engine.logging.router import (
@@ -15,6 +17,7 @@ from metis.engine.logging.router import (
     setup_engine_logging,
     teardown_engine_logging,
 )
+from metis.engine.tui.layout import _LiveTailRenderable
 from metis.engine.tui.tail import TailBuffer
 
 # ISO-8601 UTC wall clock trimmed to whole seconds + Z, then (+HH:MM:SS) elapsed
@@ -274,6 +277,38 @@ class TestLogRouter:
             "[2026-08-05T10:00:00] [INFO    ] session_id_found"
             "  session_id=s-1 entry=e5\n"
         )
+
+    def test_tail_line_shows_the_events_fields_clipped_on_one_row(
+        self, tmp_path: Path
+    ) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        line = router._render_styled(
+            {
+                "event": "runner_tool_call",
+                "level": "info",
+                "timestamp": "2026-08-05T10:00:00",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial_index": 1,
+                "worker": "w1",
+                "tool": "http_request",
+                "result": "refused",
+                "detail": "quoted nothing\nto send " + "x" * 200,
+            }
+        )
+
+        assert (
+            "runner_tool_call  tool=http_request result=refused detail=" in line.plain
+        )
+        assert "worker" not in line.plain and "trial_index" not in line.plain
+        assert "\n" not in line.plain
+        buffer = TailBuffer(max_lines=3, min_level=logging.DEBUG)
+        buffer.append(line)
+        console = Console(width=100, file=io.StringIO(), force_terminal=False)
+        console.print(_LiveTailRenderable(buffer), height=2)
+        rows = [r for r in console.file.getvalue().splitlines() if r.strip()]  # type: ignore[attr-defined]
+        assert len(rows) == 1  # the panel clips an entry to one row
+        assert rows[0].endswith("…")
 
     def test_open_trial_with_run_dir_creates_symlink(self, tmp_path: Path) -> None:
         log_dir = tmp_path / "logs"

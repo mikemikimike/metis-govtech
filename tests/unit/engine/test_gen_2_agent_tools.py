@@ -607,19 +607,22 @@ async def test_a_submission_with_no_quoted_message_is_reported_as_sent_nothing(
 
 
 @pytest.mark.asyncio
-async def test_an_action_that_also_read_the_target_is_not_sent_nothing(
+async def test_reads_before_the_refused_submission_do_not_make_the_action_a_turn(
     tmp_path: Path,
 ) -> None:
-    runner, _, _ = await _ready(tmp_path)
+    runner, target, _ = await _ready(tmp_path)
     state = await _begin_without_a_quote(runner)
 
-    await _submit(runner, state)
+    # What the runner agent does first on a real target: a health check, a session open.
     await _call(runner, state, "http_request", {"method": "GET", "path": "/status"})
-    await _call(runner, state, "report", {"outcome": "unknown", "why": "looked"})
+    await _submit(runner, state)
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no text"})
     observation = runner._observation(state, None)
 
-    assert not observation.sent_nothing
-    assert observation.notice is None
+    assert len(runner.results) > state.first_result  # the read was logged
+    assert target.sent("/chat") == []
+    assert observation.sent_nothing
+    assert "quoted no message" in (observation.notice or "")
 
 
 @pytest.mark.asyncio

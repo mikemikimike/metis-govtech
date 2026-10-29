@@ -51,8 +51,8 @@ class Observation(BaseModel):
     submission_unresolved: bool = False
     """``True`` when a submission never settled, so the target cannot take another."""
     sent_nothing: bool = False
-    """``True`` when the action tried to send a message but quoted none, and nothing
-    else reached the target. The turn is not counted."""
+    """``True`` when the action tried to send a message but quoted none, so the runner
+    refused the submission and none reached the target. The turn is not counted."""
 
 
 class Promise(BaseModel, frozen=True):

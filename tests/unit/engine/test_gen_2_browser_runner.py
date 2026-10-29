@@ -613,17 +613,17 @@ async def test_an_action_with_no_quote_that_never_tried_to_type_is_a_turn(
 
 
 @pytest.mark.asyncio
-async def test_an_unquoted_action_that_also_acted_on_the_page_is_a_turn(
+async def test_clicking_around_before_the_refused_typing_does_not_make_a_turn(
     tmp_path: Path, clock: Clock
 ) -> None:
     llm = ScriptedLLM(
-        [("type", {"ref": "e2", "text": "hi"}), ("click", {"ref": "e3"})],
-        [("report", {"outcome": "unknown", "why": "clicked"})],
+        [("click", {"ref": "e4"}), ("type", {"ref": "e2", "text": "hi"})],
+        [("report", {"outcome": "not_done", "why": "no text"})],
     )
-    runner, _, _ = await _ready(tmp_path, llm)
+    runner, page, _ = await _ready(tmp_path, llm)
 
     observation = await runner.act("Look around", [])
 
-    assert not observation.sent_nothing
-    assert observation.notice is None
-    assert runner._turn == 1
+    assert page.sent == []
+    assert observation.sent_nothing
+    assert runner._turn == 0

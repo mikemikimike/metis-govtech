@@ -54,8 +54,6 @@ class ActionState:
     first_result: int
     """``len(runner.results)`` when the action began: its entries come after this."""
     transport_failed: bool = False
-    acted: bool = False
-    """Whether the browser runner did anything on the page beyond looking at it."""
     report: Report | None = None
     refusals: list[str] = field(default_factory=list)
 

@@ -362,14 +362,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   body, copied from the transport log, and the orchestrator's per-turn log line shows the notice
   beside `reply`. The user agent's prompt says an error status need not be the assistant's fault (#545).
   An action whose runner tried to submit or type but was refused because the action quoted no
-  `⟦…⟧` message, and which sent nothing else to the target, sets `Observation.sent_nothing`
-  (code decides it, never the runner agent) and a notice saying so. It is not a turn: the
+  `⟦…⟧` message sets `Observation.sent_nothing` (code decides it, never the runner agent) and
+  a notice saying so. Reads the runner agent made first, such as a health check or opening the
+  session, do not change that. It is not a turn: the
   orchestrator leaves it out of `total_turns` and the `max_turns` budget, the user agent is shown
   the notice, and three such actions in a row end the trial as a `system_error` with failure
   `no_message_quoted`. An action that quoted nothing but never tried to send, such as a file
   fetch, is counted as before (#544).
-  The per-trial text log now keeps each event's own fields as `key=value` after the event name
-  (the file's name, level and time are not repeated). The runner agent's every tool call is logged
+  The per-trial text log and the TUI tail now show each event's own fields as `key=value` after
+  the event name (the file's name, level and time are not repeated; the tail clips a long line). The runner agent's every tool call is logged
   as `runner_tool_call` with its tool, result (`ok`, `refused`, `transport_failed`) and a short
   detail, so a refused submission shows its reason. The orchestrator logs one `turn` line per
   action with the whole action and reply and its `counted` and `sent_nothing` facts, and the user
