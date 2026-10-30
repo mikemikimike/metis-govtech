@@ -1,7 +1,8 @@
 # Choose the models
 
 METIS uses an LLM in four steps of the flow. All roles can share one OpenAI-compatible gateway, so
-a basic setup needs only three lines in `.env`.
+a basic setup needs only `OPENAI_API_KEY` in `.env`. If you use your own gateway or model, add
+`OPENAI_BASE_URL` and `DEFAULT_MODEL`, which makes three lines.
 
 ## Where METIS uses a model
 

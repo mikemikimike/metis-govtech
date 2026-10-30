@@ -55,14 +55,25 @@ Then set the required values.
 
 ### Required
 
-A model key, and the Langfuse that holds the traces of the application you test:
+A model key. Every METIS command uses it:
 
 ```dotenv
 OPENAI_API_KEY=your-model-provider-key
+```
+
+### Required to grade a run
+
+`metis engine evaluate` reads the traces of the application you test from its Langfuse. It needs
+these three values:
+
+```dotenv
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://your-langfuse
 ```
+
+`metis engine run` does the same grading after it simulates, so it needs them too. The wizard and
+`metis engine simulate` do not read them, so you can add them later, before you grade.
 
 ### Optional
 
