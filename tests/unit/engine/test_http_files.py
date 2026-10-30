@@ -35,6 +35,7 @@ class Target:
         self.listing: list[dict[str, Any]] = []
         self.blobs: dict[str, httpx.Response] = {}
         self.downloads: list[str] = []
+        self.uploads: list[bytes] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -43,6 +44,7 @@ class Target:
         if path == "/api/v1/chat":
             return httpx.Response(201, json={"sessionId": "s-1", "reply": "see a.pdf"})
         if path == "/api/v1/upload":
+            self.uploads.append(request.read())
             return httpx.Response(200, json={"fileId": "up-1"})
         if path in ("/api/v1/sessions/s-1/files", "/api/v1/files"):
             return httpx.Response(200, json={"files": self.listing})
@@ -270,6 +272,30 @@ async def test_the_users_own_upload_is_skipped_once_its_id_is_captured(
         "why": "the user's own upload",
     }
     assert _states(runner) == [("a.pdf", "received")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "media_type"),
+    [
+        ("report.md", "text/markdown"),
+        ("report.MARKDOWN", "text/markdown"),
+        ("notes.txt", "text/plain"),
+        ("blob.unknownext", "application/octet-stream"),
+    ],
+)
+async def test_an_upload_is_typed_from_its_extension(
+    tmp_path: Path, name: str, media_type: str
+) -> None:
+    runner, target = await _ready(tmp_path)
+    (tmp_path / "fixtures" / name).write_text("x", encoding="utf-8")
+    held = build_fixture_artifacts([name], tmp_path / "fixtures", tmp_path)
+    runner.use_ledger(ArtifactLedger(tmp_path, tmp_path / "trial", held))
+    runner.begin_action("Send ⟦notes⟧")
+
+    await runner.http_request("POST", "/upload", multipart={"file": f"@{name}"})
+
+    assert f"Content-Type: {media_type}".encode() in target.uploads[-1]
 
 
 @pytest.mark.asyncio
