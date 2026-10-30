@@ -13,18 +13,21 @@ import typer
 from metis.wizard.adapters.cli import commands as cli
 from metis.wizard.application import config
 from metis.wizard.application.compile import compile_experiment
-from metis.wizard.application.matching import CRITERION_JUDGE_FQN, EmbeddingMatcher
+from metis.wizard.application.matching import CRITERION_JUDGE_FQN, GraderMatcher
 from metis.wizard.contracts import ChoiceRequest, InterviewState, Option, OptionId
+from metis.wizard.contracts.output import GraderChoice, GraderChoices
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import research_assistant
 
 
 class StubInterviewer:
-    """Stands in for the gateway. Serves both roles, as the real one does."""
+    """Stands in for the gateway. It suggests no library grader for any Criterion."""
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[1.0, 0.0] for _ in texts]
+    def select_graders(self, _prompt, _offered, criterion_ids) -> GraderChoices:
+        return GraderChoices(
+            choices=[GraderChoice(criterion_id=id, grader=None) for id in criterion_ids]
+        )
 
 
 def _state_pending_at(stage: InterviewStep) -> InterviewState:
@@ -204,22 +207,15 @@ def test_a_non_retryable_failure_stops_without_offering_a_retry(
     assert offered == []  # the retryable gate short-circuits before any prompt
 
 
-def test_the_cli_wires_a_matcher() -> None:
+def test_the_cli_wires_a_matcher_on_the_same_gateway() -> None:
     """Without one, every criterion keeps grader_fqn=None and the experiment measures
     almost nothing the user chose."""
-    matcher = cli._matcher(StubInterviewer())
-
-    assert isinstance(matcher, EmbeddingMatcher)
-
-
-def test_the_matcher_uses_the_same_gateway() -> None:
-    """One endpoint and one key serve chat and embeddings, so the interviewer is the
-    embedder — there is no second integration to configure."""
     interviewer = StubInterviewer()
 
     matcher = cli._matcher(interviewer)
 
-    assert matcher.embedder is interviewer  # type: ignore[attr-defined]
+    assert isinstance(matcher, GraderMatcher)
+    assert matcher.selector is interviewer
 
 
 def test_an_unmatched_specification_loses_the_users_graders() -> None:
@@ -251,9 +247,8 @@ def test_a_matched_specification_keeps_them(a_catalogued_grader: type) -> None:
     match_specification(specification, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
     document = compile_experiment(specification, "matched")
 
-    # the stub embeds everything identically, so matches land on the fallback or a real
-    # grader — either way every scenario ends up measured by something, which is the whole
-    # difference from the unmatched case above.
+    # the stub suggests no grader, so every match is the criterion judge. Every scenario is
+    # still measured by something, which is the difference from the unmatched case above.
     assert all(task["behaviour_refs"] for task in document["tasks"])
 
 
@@ -282,7 +277,7 @@ def test_both_commands_fail_before_any_call_without_credentials(
 ) -> None:
     from typer.testing import CliRunner
 
-    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY", "EMBEDDING_API_KEY"):
+    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     # Isolate from any real `.env` in the project, which would otherwise supply exactly the
     # credentials this test is asserting the absence of.
@@ -426,7 +421,6 @@ def test_init_starts_the_interview_from_the_given_or_typed_description(
     monkeypatch.setattr("sys.stdin", _Terminal(typed))
     monkeypatch.setattr(cli, "_load_env", lambda: None)
     monkeypatch.setattr(cli, "_new_interviewer", StubInterviewer)
-    monkeypatch.setattr(cli, "_warn_without_embeddings", lambda: None)
     monkeypatch.setattr(
         opening, "read_capability_evidence", lambda **_kwargs: ([], "low")
     )
@@ -467,7 +461,7 @@ def test_init_shows_the_env_file_that_it_read(
     env_file = tmp_path / "settings.env"
     env_file.write_text("METIS_TEST_UNUSED=1\n")
     monkeypatch.setenv("METIS_ENV_FILE", str(env_file))
-    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY", "EMBEDDING_API_KEY"):
+    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY"):
         monkeypatch.delenv(name, raising=False)
 
     result = CliRunner().invoke(

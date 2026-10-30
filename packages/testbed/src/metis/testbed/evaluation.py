@@ -52,14 +52,14 @@ from metis.wizard import (
     extract_documents,
     handle_interview,
 )
-from metis.wizard.application.matching import EmbeddingMatcher
+from metis.wizard.application.matching import GraderMatcher
 from metis.wizard.contracts.conversation import AnyRequest, options_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from metis.wizard.application.interviewer import Interviewer
-    from metis.wizard.application.matching import Embedder
+    from metis.wizard.application.matching import GraderSelector
 
 LEVELS = ("features", "behaviours", "criteria", "graders", "tasks")
 
@@ -91,7 +91,7 @@ class MetisWizardTarget:
 
     def __init__(self, interviewer: Interviewer) -> None:
         self._interviewer = interviewer
-        self._matcher = EmbeddingMatcher(embedder=cast("Embedder", interviewer))
+        self._matcher = GraderMatcher(selector=cast("GraderSelector", interviewer))
 
     def _state(self, result: object) -> WizardState:
         if isinstance(result, InterviewFailure):

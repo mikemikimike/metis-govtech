@@ -99,13 +99,11 @@ if TYPE_CHECKING:
     from metis.core.model_settings import RoleSettings
 
 
-def configure_interview_runtime(
-    *, interview: RoleSettings, embeddings: RoleSettings
-) -> None:
+def configure_interview_runtime(*, interview: RoleSettings) -> None:
     """Configure the production collaborators used by :func:`handle_interview`."""
     from metis.wizard.bootstrap import configure_interview_runtime
 
-    configure_interview_runtime(interview=interview, embeddings=embeddings)
+    configure_interview_runtime(interview=interview)
 
 
 def grader_catalogue() -> list[GraderSummary]:

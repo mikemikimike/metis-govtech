@@ -214,3 +214,16 @@ class ClarifyResult(StepResult):
     """A clarify question plus target edits and the option to finish early."""
 
     done: bool = False
+
+
+class GraderChoice(_StrictDraft):
+    """The model's grader suggestion for one Criterion."""
+
+    criterion_id: str
+    # An FQN from the offered list, or None when no library grader fits. Models often leave the
+    # key out for no match, so a missing key also means None.
+    grader: str | None = None
+
+
+class GraderChoices(_StrictDraft):
+    choices: list[GraderChoice]

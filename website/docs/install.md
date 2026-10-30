@@ -93,8 +93,8 @@ JUDGE_MODEL=your-grading-model
 ```
 
 Every METIS command reads this one file. A value that you export in the shell wins. Each model
-role can also have its own key and gateway, and a few other settings exist, such as embeddings.
-See `docs/guide/models.md` and `.env.example` in the repository.
+role can also have its own key and gateway. See `docs/guide/models.md` and `.env.example` in the
+repository.
 
 ## 4. Install the browser tools (optional)
 

@@ -139,6 +139,12 @@ file. It does not guess submissions during a run.
 - Features are grouped by the work the target does for its users.
 - The Perspective sets which Behaviours matter most. The capabilities show what the target can do
   in each Feature.
+- The Wizard shows the grader library to the model through progressive disclosure. Each step
+  gets only the detail that it needs. Personas, Scenarios, and Test Cases get the list of
+  taxonomy Dimensions. Clarification and Behaviours also get the Measures in each Dimension, so
+  the questions and Behaviours can cover checks such as resource use and error recovery.
+  Criteria and later chat also get each library grader, so more Criteria fit a library grader.
+  The taxonomy is incomplete. A Criterion outside it is valid and uses the criterion judge.
 
 ## Run the evaluation
 

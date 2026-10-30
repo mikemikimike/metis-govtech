@@ -19,11 +19,9 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    ```
 
 2. Set `OPENAI_API_KEY`, and `OPENAI_BASE_URL` when you do not use the default OpenAI endpoint.
-   `INTERVIEW_MODEL` and `EMBEDDING_MODEL` are optional. The API starts when a setting is missing.
+   `INTERVIEW_MODEL` is optional. The API starts when a setting is missing.
    Without an interview key, Send is grey and shows "Configure API keys to start interview".
-   Without an embeddings key, a banner says "Set up embedding models to select optimal graders",
-   and the Interview still runs. The manual form calls no model, so it needs no key and shows
-   no banner. **Test connection** also works with no key. See the [model guide](../models.md).
+   The manual form calls no model, so it needs no key. **Test connection** also works with no key. See the [model guide](../models.md).
 3. Install the full workspace, or install the API and web projects separately:
 
    ```bash

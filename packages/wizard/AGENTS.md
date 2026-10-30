@@ -96,7 +96,7 @@ src/metis/wizard/
 │                 matcher and primer
 ├── adapters/
 │   ├── cli/      Typer commands, Rich renderer and terminal input
-│   └── llm/      LLM gateway: structured output and embeddings
+│   └── llm/      LLM gateway: structured output
 ├── bootstrap.py  the only adapter composition root
 └── __init__.py   stable headless facade: the Interview interface and interaction models
 ```
@@ -219,11 +219,11 @@ of the library.
 
 ## Package-Specific Notes
 
-The wizard calls two model roles: the interview and the embeddings. `adapters/llm/gateway.py`
-resolves both through `metis.core.model_settings` (`INTERVIEW_*`, `EMBEDDING_*`, then `OPENAI_*`).
-`OPENAI_BASE_URL` is optional. `configure_interview_runtime` takes the resolved settings and never
-writes them to `os.environ`. `init` and `resume` read the one `.env` that core finds and check both
-roles before the first model call. After the files are written, the CLI lists the roles that the run
+The wizard calls one model role: the interview. Grader matching is one more structured call on
+that role. `adapters/llm/gateway.py` resolves it through `metis.core.model_settings`
+(`INTERVIEW_*`, then `OPENAI_*`). `OPENAI_BASE_URL` is optional. `configure_interview_runtime`
+takes the resolved settings and never writes them to `os.environ`. `init` and `resume` read the
+one `.env` that core finds and check the role before the first model call. After the files are written, the CLI lists the roles that the run
 needs, with model and status. See [the model guide](../../docs/guide/models.md).
 
 The grader catalogue now reads from **metis-library** (`metis.library.graders.*`), so

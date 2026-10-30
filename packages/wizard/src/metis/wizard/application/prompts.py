@@ -20,13 +20,21 @@ from metis.wizard.application.config import (
     load_config,
     opening_question,
 )
+from metis.wizard.application.matching.library_catalogue import (
+    CatalogueDisclosure,
+    display_library_catalogue,
+)
 from metis.wizard.contracts.interview_state import (
     CapabilityConfidence,
     InterviewContext,
     Perspective,
 )
+from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.contracts.interview_state import InterviewMessage
     from metis.wizard.domain.specification import Specification
 
@@ -42,6 +50,7 @@ ModelCall: TypeAlias = Literal[
     "scenarios",
     "test_cases",
     "chat",
+    "match_graders",
 ]
 
 _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
@@ -65,11 +74,13 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "test_cases": frozenset({"specification"}),
     "chat": frozenset({"specification", "step", "text", "scope"}),
 }
+_MATCH_GRADERS_PLACEHOLDERS = frozenset({"grader_library", "criteria"})
 _SYSTEM_PLACEHOLDERS = frozenset(
     {
         "patch_rules",
         "primer",
         "arc_catalogue",
+        "grader_library",
         "perspective",
         "opening_description",
         "documents",
@@ -78,6 +89,32 @@ _SYSTEM_PLACEHOLDERS = frozenset(
         "capability_evidence",
     }
 )
+
+
+# Each call gets only the detail it needs. A new call must choose a level here.
+DISCLOSURE: dict[ModelCall, CatalogueDisclosure] = {
+    "clarify": CatalogueDisclosure.MEASURES,
+    "behaviours": CatalogueDisclosure.MEASURES,
+    "criteria": CatalogueDisclosure.GRADERS,
+    "personas": CatalogueDisclosure.OVERVIEW,
+    "scenarios": CatalogueDisclosure.OVERVIEW,
+    "test_cases": CatalogueDisclosure.OVERVIEW,
+    "chat": CatalogueDisclosure.MEASURES,
+    "match_graders": CatalogueDisclosure.GRADERS,
+}
+
+# From the Criteria step on, the user can ask chat about the grader of a Criterion.
+_CHAT_GRADERS_STEPS = frozenset(
+    step
+    for step in InterviewStep
+    if step not in {InterviewStep.CLARIFY, InterviewStep.BEHAVIOURS}
+)
+
+
+def _disclosure(call_name: ModelCall, step: str | None = None) -> CatalogueDisclosure:
+    if call_name == "chat" and step in _CHAT_GRADERS_STEPS:
+        return CatalogueDisclosure.GRADERS
+    return DISCLOSURE[call_name]
 
 
 class PromptCatalogError(RuntimeError):
@@ -100,6 +137,8 @@ class PromptCatalog:
     system_template: str
     patch_rules: str
     model_calls: Mapping[str, str]
+    match_graders_system: str
+    match_graders_user: str
 
 
 def _error(key: str, detail: str) -> PromptCatalogError:
@@ -172,10 +211,17 @@ def load_prompt_catalog() -> PromptCatalog:
         _validate_template(value, f"model_calls.{name}", allowed)
         calls[name] = value
 
+    match = _mapping(_required(document, "match_graders"), "match_graders")
+    match_system = _text(match, "match_graders.system")
+    match_user = _text(match, "match_graders.user")
+    _validate_template(match_user, "match_graders.user", _MATCH_GRADERS_PLACEHOLDERS)
+
     return PromptCatalog(
         system_template=system_template,
         patch_rules=patch_rules,
         model_calls=calls,
+        match_graders_system=match_system,
+        match_graders_user=match_user,
     )
 
 
@@ -208,6 +254,7 @@ def _system_message(
     catalog: PromptCatalog,
     context: InterviewContext | None = None,
     *,
+    disclosure: CatalogueDisclosure,
     available_fixtures: list[str] | None = None,
 ) -> str:
     return _substitute(
@@ -217,6 +264,7 @@ def _system_message(
             "patch_rules": catalog.patch_rules,
             "primer": primer(),
             "arc_catalogue": arc_catalogue(),
+            "grader_library": display_library_catalogue(disclosure),
             "perspective": _perspective_id(context),
             "perspective_guidance": _perspective(context),
             "capability_evidence": _capability_evidence(context),
@@ -336,6 +384,7 @@ def _compose(
     call_name: ModelCall | None = None,
     context: InterviewContext | None = None,
     available_fixtures: list[str] | None = None,
+    step: str | None = None,
 ) -> ModelPrompt:
     """Compose system and user messages from one fresh catalogue snapshot."""
     catalog = load_prompt_catalog()
@@ -344,9 +393,15 @@ def _compose(
         f"model_calls.{template_name}",
         values,
     )
+    name = cast("ModelCall", call_name or template_name)
     return ModelPrompt(
-        name=cast("ModelCall", call_name or template_name),
-        system=_system_message(catalog, context, available_fixtures=available_fixtures),
+        name=name,
+        system=_system_message(
+            catalog,
+            context,
+            disclosure=_disclosure(name, step),
+            available_fixtures=available_fixtures,
+        ),
         user=user,
     )
 
@@ -445,10 +500,32 @@ def chat(
         },
         context=context,
         available_fixtures=(context.document_names if context is not None else []),
+        step=step,
+    )
+
+
+def match_graders(specs: Iterable[GraderSpec], criteria: str) -> ModelPrompt:
+    """Ask which of ``specs`` fits each Criterion. ``criteria`` is the Criteria as JSON."""
+    catalog = load_prompt_catalog()
+    return ModelPrompt(
+        name="match_graders",
+        system=catalog.match_graders_system,
+        user=_substitute(
+            catalog.match_graders_user,
+            "match_graders.user",
+            {
+                "grader_library": display_library_catalogue(
+                    DISCLOSURE["match_graders"], specs
+                ),
+                "criteria": criteria,
+            },
+        ),
     )
 
 
 __all__ = [
+    "DISCLOSURE",
+    "CatalogueDisclosure",
     "ModelCall",
     "ModelPrompt",
     "PROMPTS_FILE",
@@ -462,6 +539,7 @@ __all__ = [
     "clarify",
     "criteria",
     "load_prompt_catalog",
+    "match_graders",
     "personas",
     "primer",
     "scenarios",

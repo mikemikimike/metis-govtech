@@ -36,11 +36,10 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
    | Variable | Required | Purpose |
    |---|---|---|
-   | `OPENAI_API_KEY` | Yes | API key of the shared gateway. `INTERVIEW_API_KEY` and `EMBEDDING_API_KEY` override it for one role. |
+   | `OPENAI_API_KEY` | Yes | API key of the shared gateway. `INTERVIEW_API_KEY` overrides it for the Interview. |
    | `OPENAI_BASE_URL` | No | Full OpenAI-compatible provider endpoint. Unset uses the default OpenAI endpoint. |
    | `DEFAULT_MODEL` | No | Model of every chat role. Unset uses `gpt-6-luna`. |
    | `INTERVIEW_MODEL` | No | Interview model name. Unset uses `DEFAULT_MODEL`. |
-   | `EMBEDDING_MODEL` | No | Embedding model for grader matching. Unset uses `text-embedding-3-large`. Without an embeddings key, the CLI warns, and each Criterion uses the criterion judge. |
    | `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY`, `METIS_INTERNAL_LANGFUSE_BASE_URL` | No | Tracing of the Interview model calls to the METIS-internal Langfuse. Tracing is off unless all three are set. The wizard does not use the `LANGFUSE_*` variables, which name the Langfuse of the system under test. |
 
    An environment variable has priority over the value in `.env`. The command reads one `.env`

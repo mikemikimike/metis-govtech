@@ -28,9 +28,8 @@ def test_init_happy_path_writes_specification_and_review(
     explicit: bool,
     export_clock,
 ) -> None:
-    # The scripted interviewer cannot embed, so the real matcher would fall back to the
-    # generated judge, which no longer exists (grader redesign, #428). This test is about the
-    # terminal corridor, not matching, so it uses the scripted matcher's runnable grader.
+    # This test is about the terminal corridor, not matching, so it uses the scripted
+    # matcher's runnable grader.
     monkeypatch.setattr(commands, "_matcher", lambda _interviewer: ScriptedMatcher())
     monkeypatch.chdir(tmp_path)
     root = (

@@ -158,7 +158,7 @@ class StepDriver:
     """
 
     interviewer: Interviewer
-    matcher: object | None = None  # an EmbeddingMatcher; None leaves criteria unmatched
+    matcher: object | None = None  # a GraderMatcher; None leaves criteria unmatched
     pending_warnings: list[Warning] = field(default_factory=list)
     model_error: InterviewerOutputError | None = field(default=None, repr=False)
 
@@ -1491,9 +1491,9 @@ class StepDriver:
     def match(self, state: DriverState) -> None:
         """Resolve graders for criteria that lack them.
 
-        A separate pass, run after criteria generation rather than folded into it. If the
-        provider is unreachable every criterion falls through to the generated judge, which is
-        still a working experiment — so this warns and continues rather than blocking.
+        A separate model call after criteria generation. If the call fails, every criterion
+        gets the criterion judge, which is still a working experiment. So this warns and
+        continues.
         """
         if self.matcher is None:
             return
@@ -1505,9 +1505,9 @@ class StepDriver:
             self.pending_warnings.append(
                 Warning(
                     text=(
-                        "I couldn't reach the service that picks graders, so I've written "
-                        "a custom judge for each criterion instead. The evaluation still "
-                        "runs."
+                        "The model could not pick library graders, so each new criterion "
+                        "uses a custom judge. The evaluation still runs. You can change "
+                        "the grader of each criterion."
                     ),
                     source=WarningSource.RUNTIME,
                     blocking=False,

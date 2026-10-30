@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
-  ModelBanner,
   START_BLOCKED,
   interviewReady,
   placeholderModel,
@@ -26,7 +24,7 @@ function status(
     model: `${role}-model`,
     source: `${role.toUpperCase()}_MODEL`,
     configured,
-    affects_scores: role !== "interview" && role !== "embeddings",
+    affects_scores: role !== "interview",
     missing_vars,
   };
 }
@@ -52,29 +50,19 @@ const state = {
   pending: null,
 } as unknown as InterviewState;
 
-test("only the Interview key blocks the start, and only embeddings get a banner", () => {
-  const banner = (statuses: ModelStatus[]) =>
-    renderToStaticMarkup(<ModelBanner statuses={statuses} />);
+test("only the Interview key blocks the start", () => {
   const noInterview = [
     status("interview", false, ["INTERVIEW_API_KEY", "OPENAI_API_KEY"]),
   ];
-  assert.equal(banner(noInterview), "");
   assert.equal(interviewReady(noInterview), false);
   assert.equal(START_BLOCKED, "Configure API keys to start interview");
-
-  const noEmbeddings = [status("interview", true), status("embeddings", false)];
-  assert.match(
-    banner(noEmbeddings),
-    /Set up embedding models to select optimal graders\./,
-  );
-  assert.equal(interviewReady(noEmbeddings), true);
 
   const noRunKeys = [
     status("interview", true),
     status("user_agent", false),
     status("judge", false),
   ];
-  assert.equal(banner(noRunKeys), "");
+  assert.equal(interviewReady(noRunKeys), true);
 });
 
 test("the run settings step writes model names only into the experiment defaults", () => {

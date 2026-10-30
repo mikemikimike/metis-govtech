@@ -1,1 +1,1 @@
-"""LLM gateway chat and embedding adapter."""
+"""LLM gateway structured-output adapter."""
