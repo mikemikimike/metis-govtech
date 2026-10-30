@@ -40,23 +40,22 @@ release. v1 is not finished.
 - **Files written by a beta may not load in v1**, because every `schema_version` is set to 2 at
   the v1 launch.
 - **Support is best-effort.** We read issues and pull requests, but we do not promise response times.
-- **Looking for v0?** It lives on the [`v0.x` branch](../../tree/v0.x).
 
 ### Feature status
 
 The beta supports one path: the toy app in
 [`agentic-eval-toyapp`](https://github.com/govtech-responsibleai/agentic-eval-toyapp), then
 Langfuse, then `metis wizard`, then `metis engine`, then `metis insights`. Everything off that
-path is experimental. We give no dates for individual features; follow the linked issue instead.
+path is experimental. We give no dates for individual features.
 
-| Feature | Status | Tracking |
-|---------|--------|----------|
-| Toy app traces through Langfuse | Supported | |
-| `metis wizard` | Supported | |
-| `metis engine` (command line) | Supported | |
-| `metis insights` | Supported | |
-| Engine API server | Not built | TBD |
-| Web client (`apps/web`) | Incomplete | [#348](https://github.com/govtech-responsibleai/metis/issues/348) |
+| Feature | Status |
+|---------|--------|
+| Toy app traces through Langfuse | Supported |
+| `metis wizard` | Supported |
+| `metis engine` (command line) | Supported |
+| `metis insights` | Supported |
+| Engine API server | Not built |
+| Web client (`apps/web`) | Incomplete |
 
 *Supported* means the path is meant to work end to end, and a break on it is a bug. *Experimental*
 means it may be missing, partial, or change without notice. *Not built* means no code exists yet.
@@ -112,7 +111,7 @@ For the full specification see [docs/architecture.md](docs/architecture.md).
 
 ### Install
 
-Betas are installed from a git tag. Pin the tag, never `main`, which is still the v0 line:
+Betas are installed from a git tag. Pin the tag so the code does not change under you:
 
 ```bash
 git clone --branch v1.0.0b1 https://github.com/govtech-responsibleai/metis.git
