@@ -106,8 +106,8 @@ The exception a runner raises decides what happens next:
 
 | Raise | The orchestrator |
 | --- | --- |
-| `TurnRecoverableError` or `ResponseTimeoutError` | tells the user agent the turn did not complete, and carries on. A second one in a row raises `ConsecutiveFailureEscalation` |
-| `TrialRecoverableError` (for example `AuthLossError`, `PageCrashError`) | ends the attempt, and the experiment retries the trial |
+| `TurnRecoverableError` (or a subclass) or `ResponseTimeoutError` | tells the user agent the turn did not complete, and carries on. A second one in a row raises `ConsecutiveFailureEscalation` |
+| `TrialRecoverableError` (or a subclass) | ends the attempt, and the experiment retries the trial |
 | `TargetSessionEnded` | ends the trial as `target_exhausted` with a clean record |
 | anything else | ends the trial as `system_error` |
 

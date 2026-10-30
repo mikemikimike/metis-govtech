@@ -14,11 +14,11 @@ import structlog.testing
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine.simulation._fixture_artifacts import build_fixture_artifacts
 from metis.engine.simulation.exceptions import (
-    AuthLossError,
     ConsecutiveFailureEscalation,
     ResponseTimeoutError,
     TargetSessionEnded,
-    TransientDOMError,
+    TrialRecoverableError,
+    TurnRecoverableError,
     UserAgentUnavailableError,
 )
 from metis.engine.simulation.orchestrator import Orchestrator
@@ -397,7 +397,9 @@ async def test_an_unavailable_user_agent_raises_so_the_trial_is_retried(
 async def test_a_recoverable_turn_error_counts_and_tells_the_user(
     tmp_path: Path,
 ) -> None:
-    runner = FakeRunner([Step(raises=TransientDOMError("dom")), Step(_observation())])
+    runner = FakeRunner(
+        [Step(raises=TurnRecoverableError("dom")), Step(_observation())]
+    )
     agent = ScriptedAgent([_go(), _go(), _done()])
     orch = _build(tmp_path, runner, agent)
 
@@ -430,8 +432,8 @@ async def test_two_consecutive_turn_errors_escalate_and_keep_progress(
     runner = FakeRunner(
         [
             Step(_observation(), downloads={"a.txt": b"x"}),
-            Step(raises=TransientDOMError("1")),
-            Step(raises=TransientDOMError("2")),
+            Step(raises=TurnRecoverableError("1")),
+            Step(raises=TurnRecoverableError("2")),
         ]
     )
     orch = _build(tmp_path, runner, ScriptedAgent([_go()]))
@@ -454,12 +456,12 @@ async def test_a_trial_level_error_propagates_for_the_retry_loop(
     runner = FakeRunner(
         [
             Step(_observation(), downloads={"a.txt": b"x"}),
-            Step(raises=AuthLossError("out")),
+            Step(raises=TrialRecoverableError("out")),
         ]
     )
     orch = _build(tmp_path, runner, ScriptedAgent([_go()]))
 
-    with pytest.raises(AuthLossError):
+    with pytest.raises(TrialRecoverableError):
         await orch.execute()
 
     partial = orch.partial_record("system_error")

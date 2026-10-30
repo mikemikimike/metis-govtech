@@ -53,7 +53,7 @@ def test_published_schema_rejects_secret_value(schema, chat_app):
 
 
 def test_a_browser_binding_validates_against_published_schema(schema, repo_root):
-    path = repo_root / "packages/engine/example-experiment/targets/web-chat.yaml"
+    path = repo_root / "packages/engine/examples/browser-chat-1/web-chat.yaml"
     example = yaml.safe_load(path.read_text(encoding="utf-8"))
 
     jsonschema.validate(instance=example, schema=schema)

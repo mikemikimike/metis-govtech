@@ -204,7 +204,7 @@ Point `runner_factory_ref` at
 - The loop in `runners/browser.py` is a copy of `HttpRunner`'s, and its prompt a copy of the
   frame of the HTTP one. Stage 4 merges them into a shared base.
 
-The example, `packages/engine/example-experiment/targets/web-chat.yaml`. Its URL, secret
+The example, `packages/engine/examples/browser-chat-1/web-chat.yaml`. Its URL, secret
 names and sign-in steps are made up:
 
 ```yaml

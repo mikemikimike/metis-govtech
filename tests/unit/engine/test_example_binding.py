@@ -64,8 +64,8 @@ def test_the_readme_says_it_has_only_been_tried_on_the_toy_app() -> None:
     assert "bundled toy app only" in README.read_text(encoding="utf-8")
 
 
-WEB_EXAMPLE = ENGINE / "example-experiment"
-WEB_BINDING = WEB_EXAMPLE / "targets" / "web-chat.yaml"
+WEB_EXAMPLE = EXAMPLE / "browser-chat-1"
+WEB_BINDING = WEB_EXAMPLE / "web-chat.yaml"
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def web_binding(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("CHAT_URL", "https://chat.example/")
     monkeypatch.setenv("CHAT_USER", "alice")
     monkeypatch.setenv("CHAT_PASSWORD", "SENTINEL-PASSWORD")
-    return load_target_binding(WEB_EXAMPLE, "targets/web-chat.yaml", "browser")
+    return load_target_binding(WEB_EXAMPLE, "web-chat.yaml", "browser")
 
 
 def test_the_browser_example_loads_and_reads_its_login_secrets(web_binding) -> None:
