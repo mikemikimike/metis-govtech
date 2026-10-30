@@ -627,7 +627,7 @@ def package_specification(
     """Compile a manual Specification or final Interview state into a portable export.
 
     A target connection exports `target-binding.yaml` next to `specification.yaml`, which then
-    names the gen_2 runner and the binding file. An Interview takes its connection from its
+    names the generic runner and the binding file. An Interview takes its connection from its
     state. A manual Specification takes it from `connection`, so both give the same export for
     the same binding.
 

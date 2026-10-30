@@ -1,6 +1,6 @@
 schema_version: 1
 id: research-assistant
-runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+runner_factory_ref: metis.engine.simulation.runners.http.HttpRunnerFactory
 target:
   name: Research assistant
   users: Policy analysts and their managers. Some know exactly what they want; others are

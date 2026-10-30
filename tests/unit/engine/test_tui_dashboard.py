@@ -50,7 +50,7 @@ def _make_state_with_active_trial() -> SimulationState:
         ),
     ]
     return SimulationState(
-        experiment_id="orca-eval", scenarios=scenarios, total_trials=2
+        experiment_id="toyapp-eval", scenarios=scenarios, total_trials=2
     )
 
 
@@ -67,7 +67,7 @@ class TestRenderDashboard:
         with console.capture() as capture:
             console.print(result)
         output = capture.get()
-        assert "orca-eval" in output
+        assert "toyapp-eval" in output
 
     def test_contains_progress_fractions(self) -> None:
         state = _make_state_with_active_trial()

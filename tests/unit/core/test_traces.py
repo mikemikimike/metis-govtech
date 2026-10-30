@@ -255,7 +255,7 @@ class TestLevelAndRootTieBreak:
         assert obs.status_message == "tool timed out"
 
     def test_a_flagged_root_with_a_parent_loses_to_a_parentless_one(self) -> None:
-        """A sub-agent's top span flagged as root (as Orca does) is not the trace's
+        """A sub-agent's top span flagged as root (as some frameworks do) is not the trace's
         root, even when it starts first."""
         sub = _obs("sub", parent="top", is_root=True, start=_t(0))
         top = _obs("top", parent=None, is_root=True, start=_t(1))

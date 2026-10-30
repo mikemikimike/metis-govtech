@@ -175,7 +175,7 @@ Specification in `outputs/`, and a README with source links and review notes.
 The reference cases and local reviewer do not require an installed testbed
 package. The evaluation runtime in PR #445 adds the installable
 `metis-testbed` package; evaluation data remains in the repository.
-Orca inputs are local and Git-ignored. Other inputs are tracked.
+All inputs are tracked.
 See the [Wizard guide](../packages/testbed/wizard/README.md) for the review process.
 
 A testbed runtime MAY depend on `metis-core`, `metis-engine`, `metis-wizard`, and
@@ -264,7 +264,7 @@ and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Ex
 holds Personas, Scenarios, Tasks, and execution settings. Its optional `target_binding`
 names a `metis.core.target_binding.TargetBinding` file, relative to `specification.yaml`,
 which the generic runner reads. In run mode, the Wizard exports `target-binding.yaml` next to
-`specification.yaml` and sets `runner_factory_ref` to the gen_2 HTTP or browser factory as an
+`specification.yaml` and sets `runner_factory_ref` to the generic HTTP or browser factory as an
 FQN string. The Wizard MUST NOT import the engine to do this. The binding names environment
 variables only. It travels in the client-held Interview context, and prompts MUST NOT read it.
 `metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.

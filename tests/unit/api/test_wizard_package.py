@@ -277,7 +277,7 @@ def test_an_interview_export_writes_the_binding_only_in_run_mode(
             assert f"{root}/outputs/target-binding.yaml" not in names
             assert "target_binding" not in specification
             assert specification["runner_factory_ref"] == (
-                "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+                "metis.engine.simulation.runners.http.HttpRunnerFactory"
             )
         else:
             binding = yaml.safe_load(
@@ -286,14 +286,14 @@ def test_an_interview_export_writes_the_binding_only_in_run_mode(
             assert binding["transport"] == transport.value
             assert specification["target_binding"] == "target-binding.yaml"
             assert specification["runner_factory_ref"].startswith(
-                "metis.engine.simulation.gen_2.runners."
+                "metis.engine.simulation.runners."
             )
         for name in names:
             assert PLANTED_SECRET.encode() not in archive.read(name)
 
 
 @pytest.mark.parametrize("transport", list(ConnectionTransport))
-def test_a_manual_export_with_a_connection_names_the_binding_and_the_gen_2_runner(
+def test_a_manual_export_with_a_connection_names_the_binding_and_the_generic_runner(
     client: TestClient, transport: ConnectionTransport
 ) -> None:
     response = client.post(
@@ -316,7 +316,7 @@ def test_a_manual_export_with_a_connection_names_the_binding_and_the_gen_2_runne
     assert binding["transport"] == transport.value
     assert specification["target_binding"] == "target-binding.yaml"
     assert specification["runner_factory_ref"].startswith(
-        "metis.engine.simulation.gen_2.runners."
+        "metis.engine.simulation.runners."
     )
 
 

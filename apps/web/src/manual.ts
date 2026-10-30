@@ -218,7 +218,7 @@ export function synthesizeManualSpecification(
     schema_version: 1,
     id: experiment.id.trim(),
     runner_factory_ref:
-      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+      "metis.engine.simulation.runners.http.HttpRunnerFactory",
     target: {
       name: experiment.id.trim(),
       description,

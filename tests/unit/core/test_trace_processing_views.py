@@ -155,8 +155,8 @@ class TestTurns:
         assert [turn.trace_id for turn in turns(session.traces)] == ["t1", "t2"]
 
 
-def test_processing_has_no_orca_names() -> None:
+def test_processing_names_no_application() -> None:
     """The processor is generic: no application's names belong in metis-core."""
     source = Path(trace_processing.__file__).read_text(encoding="utf-8").lower()
-    for name in ("orca", "delegate_to_agent", "form response", "current message"):
+    for name in ("delegate_to_agent", "form response", "current message"):
         assert name not in source, name

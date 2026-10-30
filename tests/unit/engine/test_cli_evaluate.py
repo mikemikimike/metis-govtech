@@ -407,7 +407,7 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
 def test_an_unsupported_trace_fails_its_session_and_the_rest_are_graded(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
-    """Issue #469: no special handling in evaluate; the per-session catch already covers it."""
+    """No special handling in evaluate; the per-session catch already covers it."""
     output = _write_experiment_dir(tmp_path)
     _write_record(output, run_name="run-1", session_id="sess-old")
     _write_record(output, run_name="run-2", session_id="sess-new")

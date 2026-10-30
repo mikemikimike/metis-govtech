@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "manual-research",
-  "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+  "runner_factory_ref": "metis.engine.simulation.runners.http.HttpRunnerFactory",
   "target": {
     "name": "manual-research",
     "description": "Check research answers and recovery.",

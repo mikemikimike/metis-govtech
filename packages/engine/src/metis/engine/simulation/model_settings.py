@@ -3,10 +3,10 @@
 Both roles resolve through ``metis.core.model_settings`` when a trial is built, never at import
 time, so a value set after import is used.
 
-- The user agent (and gen_1's artifact summariser): ``Task.user_agent_model``, then
+- The user agent: ``Task.user_agent_model``, then
   ``defaults.user_agent_model``, then ``USER_AGENT_MODEL``, then ``DEFAULT_MODEL``. Its
   gateway is ``USER_AGENT_API_KEY`` / ``USER_AGENT_BASE_URL``, then ``OPENAI_*``.
-- The runner agent (gen_2's generic runners): ``defaults.runner_agent_model``, then
+- The runner agent (the generic runners): ``defaults.runner_agent_model``, then
   ``RUNNER_AGENT_MODEL``, then the user agent model of the trial. Its gateway is
   ``RUNNER_AGENT_*``, then ``USER_AGENT_*``, then ``OPENAI_*``.
 

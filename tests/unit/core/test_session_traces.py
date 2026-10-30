@@ -1,4 +1,4 @@
-"""SessionTraces: a session's traces saved as the rows Langfuse returned (#462)."""
+"""SessionTraces: a session's traces saved as the rows Langfuse returned."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import pytest
 
 from metis.core import SessionTraces, execution_layout
 from metis.core.traces import Observation, Trace
-from tests.fixtures.traces import SESSION_ID, load_orca_session
+from tests.fixtures.traces import SESSION_ID, load_session
 
 
 def _saved(tmp_path: Path) -> tuple[Path, SessionTraces]:
-    traces = load_orca_session().traces
+    traces = load_session().traces
     saved = SessionTraces.from_traces(SESSION_ID, traces)
     path = tmp_path / "outputs" / "traces" / "s.json"
     saved.save(path)
@@ -25,7 +25,7 @@ def test_round_trip_is_lossless(tmp_path: Path) -> None:
 
     loaded = SessionTraces.load_file(path)
 
-    assert loaded.to_traces() == load_orca_session().traces
+    assert loaded.to_traces() == load_session().traces
     again = tmp_path / "again.json"
     loaded.save(again)
     assert again.read_bytes() == path.read_bytes()

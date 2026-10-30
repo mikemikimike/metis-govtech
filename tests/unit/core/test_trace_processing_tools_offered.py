@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from metis.core.trace_processing import OfferedTool, tools_offered
 from metis.core.traces import Observation, Trace
-from tests.fixtures.traces import load_orca_session
+from tests.fixtures.traces import load_session
 
 SCHEMA = {"type": "object", "properties": {"q": {"type": "string"}}}
 
@@ -103,17 +103,17 @@ def test_entries_in_another_shape_are_skipped() -> None:
     assert tools_offered(traces) == ()
 
 
-def test_the_orca_session_offers_each_agents_tools() -> None:
-    tools = tools_offered(load_orca_session().traces)
+def test_the_helpdesk_session_offers_each_agents_tools() -> None:
+    tools = tools_offered(load_session().traces)
     by_agent: dict[str | None, list[str]] = {}
     for tool in tools:
         by_agent.setdefault(tool.agent, []).append(tool.name)
     assert {agent: len(names) for agent, names in by_agent.items()} == {
-        "Orca.arun": 12,
-        "Slide_Maker.arun": 7,
-        "Data_Analysis_Agent.arun": 8,
+        "Coordinator.arun": 3,
+        "Data_Analyst.arun": 2,
+        "Report_Writer.arun": 2,
     }
-    assert "make_ppt" in by_agent["Slide_Maker.arun"]
-    [make_ppt] = [t for t in tools if t.name == "make_ppt"]
-    assert make_ppt.description is not None
-    assert make_ppt.description.startswith("Create a brand-new PowerPoint deck")
+    assert "build_report" in by_agent["Report_Writer.arun"]
+    [build_report] = [t for t in tools if t.name == "build_report"]
+    assert build_report.description is not None
+    assert build_report.description.startswith("Create a brand-new report")

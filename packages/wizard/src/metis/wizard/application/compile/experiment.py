@@ -14,9 +14,7 @@ if TYPE_CHECKING:
     from metis.wizard.domain.specification import Specification
 
 SCHEMA_VERSION = 2
-DEFAULT_RUNNER_FACTORY_REF = (
-    "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
-)
+DEFAULT_RUNNER_FACTORY_REF = "metis.engine.simulation.runners.http.HttpRunnerFactory"
 
 
 class CompilationError(Exception):

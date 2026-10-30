@@ -8,7 +8,7 @@ Evaluation runtime — simulation harness, trace extraction, and grader executio
 
 ## Runner Contract
 
-`docs/runner-contract.md` is normative for every `Runner` implementation. When changing a runner, `Observation`, `ActionResult`, or the orchestrator's handling of either, read it first and keep it in sync — it is the document the conformance suite in issue #358 will be written against.
+`docs/runner-contract.md` is normative for every `Runner` implementation. When changing a runner, `Observation`, or the orchestrator's handling of either, read it first and keep it in sync.
 
 ## Schema Sync
 
@@ -24,12 +24,6 @@ Commit the updated schema file alongside the model change.
 
 ## Schema Versioning
 
-**v0.x policy:** v0.x releases use `schema_version: 1` for every schema and may break schemas freely — consumers pin to exact package versions.
-
-**`next` (v1 pre-release) policy:** Every schema stays at `schema_version: 1`. Breaking changes on `next` do not bump it; record them in `MIGRATION.md` instead.
-
-**v1.x policy (planned):** Starting with the 1.0 release, proper schema versioning will be enforced. Breaking changes will bump `schema_version`, and migration paths will be documented. The bump checklist below applies from 1.0 onward.
-
 When modifying `Specification` or `TrialRecord`, check whether the change is **breaking** — i.e., whether data valid under the current version would fail `model_validate()` under the new model.
 
 **A bump is required for:** new required fields, type changes, field renames, breaking changes in nested models.
@@ -40,12 +34,12 @@ A breaking change to a nested model bumps the version of the root model that con
 - Shared Profile nodes, `Scenario`, `Task`, and `Criterion` → bump `Specification`
 - `TrialConfig`, `TrialOutcome`, `TrialFailure`, `Artifact` → bump `TrialRecord`
 
-### Bump Checklist (applies from v1.0)
+### Bump Checklist
 
 1. Increment `_SPECIFICATION_VERSION` in `metis.core.specification` or `_TRIAL_RECORD_VERSION` in `metis.core.trials`
 2. Update the `Literal[N]` annotation on the model field to match
 3. Run `make -C packages/core generate-schema` if `Specification` changed
-4. Update `examples/gen_1-orca_api-1/specification.yaml` and `packages/testbed/wizard/cases/orca/outputs/specification.yaml` if affected
+4. Update `examples/http-agentic_eval_toyapp-1/specification.yaml` if affected
 5. Note the schema version change in the commit message
 
 See `packages/core/schemas/README.md` for the version policy.

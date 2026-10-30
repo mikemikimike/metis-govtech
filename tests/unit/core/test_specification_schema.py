@@ -27,11 +27,9 @@ def example_path(repo_root: Path) -> Path:
     return (
         repo_root
         / "packages"
-        / "testbed"
-        / "wizard"
-        / "cases"
-        / "orca"
-        / "outputs"
+        / "engine"
+        / "examples"
+        / "http-agentic_eval_toyapp-1"
         / "specification.yaml"
     )
 

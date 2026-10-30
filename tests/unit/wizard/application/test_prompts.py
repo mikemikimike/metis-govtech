@@ -19,7 +19,7 @@ from metis.wizard.contracts import (
 )
 from metis.wizard.contracts.interview_state import InterviewMessage, Perspective
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.specifications import orca_handover, research_assistant
+from tests.fixtures.wizard.specifications import desk_handover, research_assistant
 
 PERSPECTIVES = Path("packages/wizard/src/metis/wizard/application/perspectives")
 
@@ -284,7 +284,7 @@ def test_clarify_progress_values_are_substituted_into_the_template(
     ]
     assert prompts._clarify_progress(at_cap) == (5, 5, 0)
 
-    final_prompt = prompts.clarify(orca_handover(), at_cap, context=interview_context())
+    final_prompt = prompts.clarify(desk_handover(), at_cap, context=interview_context())
     assert final_prompt.user == "<progress>5/5/0</progress>"
 
 
@@ -308,7 +308,7 @@ def test_model_calls_receive_their_required_context(
     call: str,
     perspective: Perspective,
 ) -> None:
-    specification = orca_handover()
+    specification = desk_handover()
     context = interview_context(
         perspective=perspective, known_capability_ids=["tool_use"], confidence="high"
     )

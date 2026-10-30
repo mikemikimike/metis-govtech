@@ -21,28 +21,28 @@ CITATION_GRADER = "tests.unit.engine.graders_for_tests.FixedScoreGrader"
 BOUNDED_TROUBLESHOOTING = "metis.library.graders.demo.DemoTraceBudgetGrader"
 
 
-def orca_handover() -> Specification:
+def desk_handover() -> Specification:
     """A rich target handover whose separate facts must survive clarify."""
     return Specification(
         target=Target(
-            name="Orca",
-            users="Public Officers",
+            name="Helpdesk",
+            users="Support managers",
             description=(
-                "An orchestrator that coordinates specialist agents for public officers."
+                "A coordinator that hands support questions to specialist agents for "
+                "support managers."
             ),
             detail=(
                 "Current specialists:\n"
-                "- Data Analyst performs exploratory analysis on supplied datasets.\n"
-                "- Text Analyst clusters and analyses collections of text.\n"
-                "- Slide Maker generates PowerPoint decks from a user's brief and evidence.\n"
-                "- Slide Reviewer checks generated decks and returns revision feedback.\n"
-                "- Criteria Evaluator assesses work against explicit evaluation criteria.\n\n"
+                "- Data Analyst runs ticket queries and reports the figures.\n"
+                "- Report Writer turns figures into a finished report from a template.\n"
+                "- Report Reviewer checks a generated report and returns revision feedback.\n\n"
                 "Workflow and coordination:\n"
-                "Orca interprets the request, routes each part to the relevant specialist and "
-                "returns their outputs within one workflow. A deck workflow can pass a generated "
-                "deck from Slide Maker to Slide Reviewer before returning it.\n\n"
+                "The coordinator interprets the request, routes each part to the relevant "
+                "specialist and returns their outputs within one workflow. A report workflow "
+                "can pass a generated report from Report Writer to Report Reviewer before "
+                "returning it.\n\n"
                 "Current limits:\n"
-                "These five specialists are the capabilities live today."
+                "These three specialists are the capabilities live today."
             ),
         )
     )

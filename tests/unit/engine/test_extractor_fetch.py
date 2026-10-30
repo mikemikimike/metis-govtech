@@ -41,7 +41,7 @@ def _obs(
         "id": obs_id,
         "traceId": trace_id,
         "sessionId": session_id,
-        "name": "orca-chat" if parent is None else "child",
+        "name": "chat-turn" if parent is None else "child",
         "type": "AGENT",
         "input": "a question",
         "output": output,
@@ -135,7 +135,7 @@ class TestTwoStepFetch:
     def test_trace_observations_come_from_the_trace_filter(
         self, tmp_path: Path
     ) -> None:
-        """Issue #435: the session filter drops agent-run spans and session-less rows."""
+        """The session filter drops agent-run spans and session-less rows."""
         root = _obs("root", "t1")
         agent = _obs("agent", "t1", session_id="agno-uuid", parent="root")
         no_session = _obs("gen", "t1", session_id=None, parent="agent")
@@ -282,7 +282,7 @@ class TestArtifacts:
 
 
 class TestTracesFromBeforeTheV4Upgrade:
-    """Issue #469: such traces come back with every observation doubled and a ``t-<traceId>``
+    """Such traces come back with every observation doubled and a ``t-<traceId>``
     root, and the stored set changes with page size, so they are rejected, not repaired."""
 
     def test_synthetic_root_fails_the_session(self, tmp_path: Path) -> None:

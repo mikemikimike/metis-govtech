@@ -36,7 +36,7 @@ const baseState = (): InterviewState => ({
     schema_version: 1,
     id: "test",
     runner_factory_ref:
-      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+      "metis.engine.simulation.runners.http.HttpRunnerFactory",
     tasks: [],
     target: { name: "", users: "", description: "", detail: "" },
     features: [],

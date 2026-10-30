@@ -31,9 +31,8 @@ def test_use_case_has_inputs_documentation_and_valid_reference(case_path: str) -
     case, root = load_case(EVALS_ROOT, case_path)
     assert (root / "README.md").read_text().strip()
     assert (root / "inputs").is_dir()
-    if case.id != "orca":
-        assert case.inputs
-        assert "inputs/prompt.md" in case.inputs
+    assert case.inputs
+    assert "inputs/prompt.md" in case.inputs
     for relative in case.inputs:
         assert _file(root, relative).stat().st_size > 0
     spec = Specification.model_validate(_read(_file(root, case.expected_output)))

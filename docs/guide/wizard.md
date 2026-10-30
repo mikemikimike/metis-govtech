@@ -104,7 +104,7 @@ the fields are valid but the target does not answer, you can still continue. `re
 that the binding was not tested.
 
 A download with a binding has `outputs/target-binding.yaml` next to `outputs/specification.yaml`.
-The Specification names the gen_2 runner in `runner_factory_ref` and the file in `target_binding`.
+The Specification names the generic runner in `runner_factory_ref` and the file in `target_binding`.
 The binding file starts with a comment that lists the variables to set.
 
 ### Submissions

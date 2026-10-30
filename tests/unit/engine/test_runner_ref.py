@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.runner_resolver import resolve_runner_factory
-from metis.engine.simulation.types import ChosenAction, Observation, Specification
+from metis.engine.simulation.types import Observation, Promise, Reading, Specification
 
 
 class TestRunnerRefField:
@@ -92,13 +92,11 @@ class TestResolveRunnerFactory:
 
     def test_resolve_playwright_factory(self) -> None:
         pytest.importorskip("playwright")
-        fqn = "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
+        fqn = "metis.engine.simulation.runners.browser.BrowserRunnerFactory"
         cls = resolve_runner_factory(fqn)
-        from metis.engine.simulation.runners.orca_playwright import (
-            OrcaPlaywrightRunnerFactory,
-        )
+        from metis.engine.simulation.runners.browser import BrowserRunnerFactory
 
-        assert cls is OrcaPlaywrightRunnerFactory
+        assert cls is BrowserRunnerFactory
 
     def test_resolve_nonexistent_module_raises_import_error(self) -> None:
         with pytest.raises(ImportError, match="No module named 'nonexistent'"):
@@ -121,17 +119,23 @@ class TestResolveRunnerFactory:
 
 
 class StubRunner(Runner):
+    @property
+    def session_id(self) -> str | None:
+        return None
+
     async def setup(self, config: TrialConfig) -> None:
         pass
 
-    async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
-        return Observation(text="stub")
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
+        return Observation(
+            reply="stub", reading=Reading(outcome="completed", why="A stub reply.")
+        )
+
+    async def end_chat(self, promised: list[Promise]) -> None:
+        pass
 
     async def teardown(self) -> None:
         pass
-
-    async def get_session_id(self) -> str | None:
-        return None
 
 
 class StubRunnerFactory:
@@ -173,13 +177,11 @@ class TestRunnerRefCLIIntegration:
     def test_resolve_playwright_factory_from_experiment(self) -> None:
         pytest.importorskip("playwright")
         from metis.engine.simulation.runner_resolver import resolve_runner_factory
-        from metis.engine.simulation.runners.orca_playwright import (
-            OrcaPlaywrightRunnerFactory,
-        )
+        from metis.engine.simulation.runners.browser import BrowserRunnerFactory
 
-        fqn = "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
+        fqn = "metis.engine.simulation.runners.browser.BrowserRunnerFactory"
         cls = resolve_runner_factory(fqn)
-        assert cls is OrcaPlaywrightRunnerFactory
+        assert cls is BrowserRunnerFactory
 
 
 class TestRunnerRefValidation:
@@ -273,16 +275,16 @@ class TestExampleExperiment:
         / "packages"
         / "engine"
         / "examples"
-        / "gen_1-orca_api-1"
+        / "http-agentic_eval_toyapp-1"
         / "specification.yaml"
     )
 
     def test_example_experiment_loads(self) -> None:
         document = Specification.load_file(self.EXAMPLE)
-        assert document.experiment.id == "orca-simple"
+        assert document.experiment.id == "toyapp-http-simple"
         assert (
             document.experiment.runner_factory_ref
-            == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+            == "metis.engine.simulation.runners.http.HttpRunnerFactory"
         )
         graders = {c.grader_fqn for b in document.behaviours() for c in b.criteria}
-        assert graders == {"metis.library.graders.demo.DemoTraceBudgetGrader"}
+        assert graders == {"metis.library.graders.CriterionJudgeGrader"}

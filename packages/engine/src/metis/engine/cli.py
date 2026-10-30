@@ -102,18 +102,11 @@ def _check_model_roles(
         raise typer.Exit(code=1) from None
 
 
-def _simulation_roles(runner_factory_ref: str) -> list[ModelRole]:
-    """The user agent, and the runner agent when the factory's runners have one."""
+def _simulation_roles() -> list[ModelRole]:
+    """The roles a simulation calls: the user agent and the runner agent."""
     from metis.core.model_settings import ModelRole
-    from metis.engine.simulation.runner_resolver import resolve_runner_factory
-    from metis.engine.simulation.trial import _GENERATIONS
 
-    factory_cls = resolve_runner_factory(runner_factory_ref)
-    generation = _GENERATIONS.get(getattr(factory_cls, "generation", "gen_1"))
-    roles = [ModelRole.USER_AGENT]
-    if generation is not None and generation.has_runner_agent:
-        roles.append(ModelRole.RUNNER_AGENT)
-    return roles
+    return [ModelRole.USER_AGENT, ModelRole.RUNNER_AGENT]
 
 
 def _needs_judge(specification: Specification) -> bool:
@@ -447,8 +440,7 @@ def _resolve_experiment_dir(experiment_dir: Path) -> Path:
     if (resolved / "trials").is_dir() or (resolved / "reports").is_dir():
         console.print(
             "Error: this execution uses an earlier folder layout. "
-            "Migrate it to outputs/trials/ and outputs/reports/ before use. "
-            "See MIGRATION.md.",
+            "Move it to outputs/trials/ and outputs/reports/ before use.",
             style="bold red",
         )
         raise EvaluationInputError("unsupported execution layout")
@@ -564,12 +556,12 @@ def _check_simulation_settings(
 ) -> None:
     """Check the roles that ``command`` calls, before any client exists.
 
-    ``simulate`` checks the user agent, and the runner agent of a generic runner. ``run``
+    ``simulate`` checks the user agent and the runner agent. ``run``
     also checks the judge when a criterion uses a model-based grader.
     """
     from metis.core.model_settings import ModelRole
 
-    roles = _simulation_roles(specification.runner_factory_ref)
+    roles = _simulation_roles()
     if command == "run" and _needs_judge(specification):
         roles.append(ModelRole.JUDGE)
     _check_model_roles(command, roles, env_file)
@@ -687,12 +679,12 @@ def _run_simulation(
         redo_plan = trial_plan
         completed_records = {}
 
-    from metis.engine.simulation.gen_2.binding import TargetBindingError
+    from metis.engine.simulation.binding import TargetBindingError
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
     factory_cls = resolve_runner_factory(specification.runner_factory_ref)
 
-    # a factory that needs the specification asks for it; gen_1's are built bare
+    # a factory that needs the specification asks for it; any other is built bare
     from_specification = getattr(factory_cls, "from_specification", None)
     try:
         runner_factory = (

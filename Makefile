@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
+.PHONY: install-docs run-docs build-docs check-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
 
 help:
 	@printf "Available targets:\n"
@@ -40,9 +40,7 @@ help:
 	@printf "\n"
 	@printf "Other:\n"
 	@printf "  make clean             Remove all generated/cached files\n"
-	@printf "  make release-init      Create release branch + tracking issue (PKG=<name>|APP=<name> VER=<semver>)\n"
-	@printf "  make release-branch    Create release branch only\n"
-	@printf "  make release-issue     Create release tracking issue only\n"
+	@printf "  make release-branch    Create a release branch (PKG=<name>|APP=<name> VER=<semver>)\n"
 
 install:
 	uv sync --all-packages --group dev --extra test
@@ -187,16 +185,6 @@ else
   FULL_NAME :=
 endif
 
-# Platform detection (override with PLATFORM=github|gitlab)
-REMOTE_URL := $(shell git remote get-url origin 2>/dev/null)
-ifndef PLATFORM
-  ifneq (,$(findstring github.com,$(REMOTE_URL)))
-    PLATFORM := github
-  else ifneq (,$(findstring gitlab.com,$(REMOTE_URL)))
-    PLATFORM := gitlab
-  endif
-endif
-
 define check_release_args
 	@if [ -z "$(COMPONENT)" ]; then \
 		printf "Error: Set PKG=<name> (for packages/) or APP=<name> (for apps/)\n"; \
@@ -216,9 +204,6 @@ define check_release_args
 endef
 
 RELEASE_BRANCH := release/$(FULL_NAME)/v$(VER)
-TEMPLATE := docs/templates/release-issue.md
-
-release-init: release-branch release-issue
 
 release-branch:
 	$(check_release_args)
@@ -231,25 +216,6 @@ release-branch:
 	@printf "Created and switched to branch: $(RELEASE_BRANCH)\n"
 	@printf "\n"
 	@printf "Next steps:\n"
-	@printf "  1. Update $(COMPONENT_DIR)/CHANGELOG.md — add a section for v$(VER)\n"
-	@printf "  2. Update $(COMPONENT_DIR)/pyproject.toml — bump version to \"$(VER)\"\n"
-	@printf "  3. Run: uv lock\n"
-	@printf "  4. Push the branch: git push -u origin $(RELEASE_BRANCH)\n"
-
-release-issue:
-	$(check_release_args)
-	@TITLE="$(FULL_NAME)/v$(VER)"; \
-	BODY=$$(sed \
-		-e 's|{{package}}|$(FULL_NAME)|g' \
-		-e 's|{{version}}|$(VER)|g' \
-		-e 's|{{dir}}|$(COMPONENT_DIR)|g' \
-		"$(TEMPLATE)" | sed '1,/^---$$/d'); \
-	if [ "$(PLATFORM)" = "github" ] && command -v gh >/dev/null 2>&1; then \
-		printf "%s\n" "$$BODY" | gh issue create --title "$$TITLE" --label release --label "$(FULL_NAME)" --body-file -; \
-	elif [ "$(PLATFORM)" = "gitlab" ] && command -v glab >/dev/null 2>&1; then \
-		printf "%s\n" "$$BODY" | glab issue create --title "$$TITLE" --label release --label "$(FULL_NAME)" --description "$$BODY"; \
-	else \
-		printf "=== Issue Title ===\n%s\n\n=== Issue Body ===\n%s\n" "$$TITLE" "$$BODY"; \
-		printf "\n---\nNo platform CLI detected. Paste the above into your issue tracker manually.\n"; \
-		printf "Hint: install gh (GitHub) or glab (GitLab), or set PLATFORM=github|gitlab\n"; \
-	fi
+	@printf "  1. Update $(COMPONENT_DIR)/pyproject.toml — bump version to \"$(VER)\"\n"
+	@printf "  2. Run: uv lock\n"
+	@printf "  3. Push the branch: git push -u origin $(RELEASE_BRANCH)\n"

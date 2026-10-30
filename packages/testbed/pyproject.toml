@@ -26,4 +26,4 @@ metis-wizard = { workspace = true }
 packages = ["src/metis"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/wizard/.reviewer", "/wizard/cases/orca/inputs"]
+exclude = ["/wizard/.reviewer"]

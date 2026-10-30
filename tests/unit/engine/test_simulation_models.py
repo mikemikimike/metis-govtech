@@ -19,7 +19,7 @@ from tests.unit.engine.test_cli_evaluate import GRADERS, _spec_with
 from tests.unit.engine.test_cli_simulate import MINIMAL_EXPERIMENT
 
 runner = CliRunner()
-_HTTP_REF = "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory"
+_HTTP_REF = "metis.engine.simulation.runners.http.HttpRunnerFactory"
 
 
 def test_a_task_model_reaches_the_trial_and_the_trial_records_its_models(
@@ -35,11 +35,11 @@ def test_a_task_model_reaches_the_trial_and_the_trial_records_its_models(
     assert scenario.user_agent_model == "task-ua"
 
     monkeypatch.setenv("USER_AGENT_MODEL", "env-ua")
-    assert trial_models(None, None, has_runner_agent=False) == {
+    assert trial_models(None, None) == {
         "user_agent_model": "env-ua",
-        "runner_agent_model": None,
+        "runner_agent_model": "env-ua",
     }
-    assert trial_models("ua", None, has_runner_agent=True) == {
+    assert trial_models("ua", None) == {
         "user_agent_model": "ua",
         "runner_agent_model": "ua",
     }

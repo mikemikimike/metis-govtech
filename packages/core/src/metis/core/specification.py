@@ -51,9 +51,7 @@ class SpecificationDocument(BaseModel):
 
     schema_version: Literal[1] = _SPECIFICATION_VERSION
     id: str = ""
-    runner_factory_ref: str = (
-        "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
-    )
+    runner_factory_ref: str = "metis.engine.simulation.runners.http.HttpRunnerFactory"
     target_binding: RelativePath | None = None
     defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)
     target: Target

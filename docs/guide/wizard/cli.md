@@ -14,7 +14,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 - Python 3.11 or later
 - [uv](https://docs.astral.sh/uv/)
 - GNU Make
-- An OpenAI-compatible model provider, such as Platform AI
+- An OpenAI-compatible model provider
 
 ## Set up
 

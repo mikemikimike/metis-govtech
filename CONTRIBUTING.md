@@ -60,8 +60,6 @@ For the full specification (component contracts, dependency invariants, versioni
 
 ## Development Workflow
 
-For the step-by-step GitHub collaboration playbook (branching, PRs, reviews, merging), see [docs/github-workflow.md](docs/github-workflow.md).
-
 ### Branching
 
 Branch off `main` with a descriptive prefix:
@@ -75,45 +73,6 @@ Branch off `main` with a descriptive prefix:
 | `test/` | Adding or improving tests |
 
 Example: `feat/langfuse-ingester`, `fix/score-validation`
-
-### Target branch: `next` vs. `v0.x`
-
-METIS is preparing a coordinated v0 → v1.0 major bump across all packages. That work lives on a
-long-lived **`next`** integration branch, tracked by the [v1.0 development plan](https://github.com/govtech-responsibleai/metis/issues/221).
-Pick your target branch by the kind of change:
-
-| Change | Branch off | PR into |
-|--------|-----------|---------|
-| v1 feature or breaking change | `next` | `next` |
-| v0 bugfix / patch | `v0.x` | `v0.x` |
-
-**`next` is an exception zone.** For the whole v1 pre-release phase the release ceremony is
-suspended so engineers can move fast:
-
-- **No release branches, tracking issues, or tags on `next`.** The `release/<pkg>/v<semver>`
-  workflow and `make release-*` targets below apply to released lines (`v0.x`), not `next`.
-- **Every package version is frozen at `1.0.0a1`.** Do not bump or tag it per change — it flips to
-  `1.0.0` once, at graduation. It is an honest "unstable v1 pre-release" marker, not a progress counter.
-- **Breaking changes are cheap** — no deprecation dance. Record each one in `MIGRATION.md`.
-- **Changelog entries go in one combined file.** Add v1 entries to the temporary
-  [`CHANGELOG.next.md`](CHANGELOG.next.md) at the repo root (grouped by package), **not** to the
-  per-package `CHANGELOG.md` files. Those keep their v0.x history untouched on `next`. At graduation the
-  combined file is split back into each package's `CHANGELOG.md` under a `## [1.0.0]` heading and deleted.
-- **Code review and `make ci` still apply.** Only the release ceremony is dropped.
-- **Pull relevant v0 fixes into `next` by cherry-picking** the fix commit from `v0.x` — never
-  full-merge (that drags in v0 version commits and conflicts on every package's `version` line).
-
-**`v0.x` keeps the normal release workflow** — `release/<pkg>/v0.x.y` branches and `<pkg>/v0.x.y`
-tags, critical/security fixes only. On `v0.x`, write CHANGELOG entries per package during development,
-as normal; on `next`, use the combined `CHANGELOG.next.md` (see above), which is split back into the
-per-package files at graduation. When `next` stabilizes it merges to `main` in a single
-coordinated bump, and the normal release workflow resumes on `main`. See
-[docs/version-maintenance.md](docs/version-maintenance.md) for the graduation and v0.x maintenance procedure.
-
-> **⚠️ Remove at graduation.** This whole "Target branch" section, the root `CHANGELOG.next.md`, and
-> every other `next` / `1.0.0a1` mention across the repo are temporary pre-release scaffolding. When
-> `next` merges to `main`, strip them per the
-> [graduation cleanup checklist](docs/version-maintenance.md#graduating-next-to-main).
 
 ### Running Checks
 
@@ -230,31 +189,11 @@ When adding a new workspace package:
 
 ## Pull Requests
 
-### Changelog entries
-
-Describe the final result of the PR relative to its target branch. Update entries during
-development and review them before merge.
-
-- Compare the final code with the PR base. Use the commit history to identify intermediate
-  changes, then combine entries that describe the same feature.
-- If the PR adds A and later removes A, omit both entries. If it adds A and later replaces A
-  with B, describe B as the addition.
-- If A exists in the PR base and the PR removes or replaces it, keep the removal or change
-  entry. Keep migration information for existing users.
-- Describe a new feature and its final behaviour in one entry. A correction to that feature
-  within the same PR belongs in that entry.
-- Use one heading for each change type within each package and version section.
-- Preserve released history and unrelated entries from other PRs. Correct an earlier
-  unreleased entry only when its PR history confirms the error.
-
-These rules apply to both package changelogs and the combined pre-release changelog.
-
 ### Before Opening
 
 - [ ] `make check` passes locally
 - [ ] New code has tests
 - [ ] No unrelated changes bundled in
-- [ ] Changelog entries follow the [final-result rules](#changelog-entries)
 
 ### What Reviewers Look For
 
@@ -280,12 +219,11 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 ## Versioning & Release
 
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release). For coordinated major version bumps and maintenance branches, see [docs/version-maintenance.md](docs/version-maintenance.md).
+Each package is versioned independently via a static `version` field in its `pyproject.toml`.
 
 The naming conventions are:
 - **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)
 - **Tag:** `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`)
-- **Issue title:** `<package-name>/v<semver>`
 
 The `release/` prefix on branches prevents ambiguity with identically-named tags.
 
@@ -295,42 +233,13 @@ Key rules:
 - Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
 - Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
 
-### Release Make Targets
-
-The following targets automate release setup:
+### Release Make Target
 
 ```bash
-make release-init   PKG=engine VER=0.2.1   # Create branch (release/metis-engine/v0.2.1) + tracking issue
-make release-branch PKG=engine VER=0.2.1   # Create branch only
-make release-issue  APP=api    VER=1.0.0   # Create issue only
+make release-branch PKG=engine VER=0.2.1   # Create branch (release/metis-engine/v0.2.1)
 ```
 
 Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
-
-Platform detection is automatic (GitHub/GitLab via remote URL). Override with `PLATFORM=github|gitlab` for self-hosted instances. If no CLI is available, the formatted issue is printed to stdout for manual pasting.
-
-> **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
-
-> **First-time setup:** Create the required labels on your repo before first use:
-> ```bash
-> # GitHub
-> gh label create release --description "Release tracking" --color 0E8A16
-> gh label create metis-core --description "" --color C5DEF5
-> gh label create metis-library --description "" --color C5DEF5
-> gh label create metis-engine --description "" --color C5DEF5
-> gh label create metis-wizard --description "" --color C5DEF5
-> gh label create metis-insights --description "" --color C5DEF5
-> gh label create metis-api --description "" --color C5DEF5
->
-> # GitLab
-> glab label create release --description "Release tracking" --color 0E8A16
-> glab label create metis-core --color C5DEF5
-> glab label create metis-library --color C5DEF5
-> glab label create metis-engine --color C5DEF5
-> glab label create metis-wizard --color C5DEF5
-> glab label create metis-insights --color C5DEF5
-> glab label create metis-api --color C5DEF5
-> ```
 
 ## Getting Help
 

@@ -36,13 +36,33 @@ TRIALS = 4
 # (id, name, description) for each criterion, grouped under its behaviour.
 CRITERIA = {
     "B-1": [
-        ("C-1", "Factual accuracy", "Every fact in the answer matches the retrieved source."),
-        ("C-2", "Evidence source suitability", "The assistant cites current, authorised sources."),
-        ("C-3", "Claim support by evidence", "Each claim in the answer traces to a retrieved document."),
-        ("C-4", "Capability limits handling", "The assistant says when it cannot find what the user needs."),
+        (
+            "C-1",
+            "Factual accuracy",
+            "Every fact in the answer matches the retrieved source.",
+        ),
+        (
+            "C-2",
+            "Evidence source suitability",
+            "The assistant cites current, authorised sources.",
+        ),
+        (
+            "C-3",
+            "Claim support by evidence",
+            "Each claim in the answer traces to a retrieved document.",
+        ),
+        (
+            "C-4",
+            "Capability limits handling",
+            "The assistant says when it cannot find what the user needs.",
+        ),
     ],
     "B-2": [
-        ("C-5", "Audience and tone fit", "The draft matches the recipient and the requested tone."),
+        (
+            "C-5",
+            "Audience and tone fit",
+            "The draft matches the recipient and the requested tone.",
+        ),
     ],
 }
 TASKS = {
@@ -52,11 +72,31 @@ TASKS = {
 }
 # Per criterion, the score of each trial of each test case.
 SCORES: dict[str, dict[str, list[float]]] = {
-    "C-1": {"T-1": [0.9, 0.4, 0.8, 0.9], "T-2": [0.8, 0.9, 0.5, 0.9], "T-3": [0.9, 0.8, 0.9, 0.6]},
-    "C-2": {"T-1": [0.8, 0.5, 0.9, 0.6], "T-2": [0.9, 0.8, 0.9, 0.8], "T-3": [0.7, 0.9, 0.4, 0.8]},
-    "C-3": {"T-1": [0.9, 0.9, 0.8, 1.0], "T-2": [0.9, 0.8, 0.9, 0.9], "T-3": [0.8, 0.9, 0.9, 0.7]},
-    "C-4": {"T-1": [1.0, 0.9, 1.0, 0.9], "T-2": [0.9, 1.0, 1.0, 0.9], "T-3": [0.9, 0.8, 1.0, 1.0]},
-    "C-5": {"T-1": [0.6, 0.8, 0.5, 0.9], "T-2": [0.8, 0.9, 0.7, 0.6], "T-3": [0.5, 0.8, 0.9, 0.4]},
+    "C-1": {
+        "T-1": [0.9, 0.4, 0.8, 0.9],
+        "T-2": [0.8, 0.9, 0.5, 0.9],
+        "T-3": [0.9, 0.8, 0.9, 0.6],
+    },
+    "C-2": {
+        "T-1": [0.8, 0.5, 0.9, 0.6],
+        "T-2": [0.9, 0.8, 0.9, 0.8],
+        "T-3": [0.7, 0.9, 0.4, 0.8],
+    },
+    "C-3": {
+        "T-1": [0.9, 0.9, 0.8, 1.0],
+        "T-2": [0.9, 0.8, 0.9, 0.9],
+        "T-3": [0.8, 0.9, 0.9, 0.7],
+    },
+    "C-4": {
+        "T-1": [1.0, 0.9, 1.0, 0.9],
+        "T-2": [0.9, 1.0, 1.0, 0.9],
+        "T-3": [0.9, 0.8, 1.0, 1.0],
+    },
+    "C-5": {
+        "T-1": [0.6, 0.8, 0.5, 0.9],
+        "T-2": [0.8, 0.9, 0.7, 0.6],
+        "T-3": [0.5, 0.8, 0.9, 0.4],
+    },
 }
 
 
@@ -106,13 +146,33 @@ def specification() -> dict[str, Any]:
             },
         ],
         "personas": [
-            {"id": "P-1", "name": "Collaborative knowledge worker", "description": "Shares context and iterates."},
-            {"id": "P-2", "name": "Busy senior manager", "description": "Short, direct requests."},
+            {
+                "id": "P-1",
+                "name": "Collaborative knowledge worker",
+                "description": "Shares context and iterates.",
+            },
+            {
+                "id": "P-2",
+                "name": "Busy senior manager",
+                "description": "Short, direct requests.",
+            },
         ],
         "scenarios": [
-            {"id": "S-1", "name": "Draft a reply using a past event record", "description": "Reply to the offsite thread."},
-            {"id": "S-2", "name": "Answer a staff HR question", "description": "Find the current leave policy."},
-            {"id": "S-3", "name": "Summarise a project update", "description": "Summarise the latest status deck."},
+            {
+                "id": "S-1",
+                "name": "Draft a reply using a past event record",
+                "description": "Reply to the offsite thread.",
+            },
+            {
+                "id": "S-2",
+                "name": "Answer a staff HR question",
+                "description": "Find the current leave policy.",
+            },
+            {
+                "id": "S-3",
+                "name": "Summarise a project update",
+                "description": "Summarise the latest status deck.",
+            },
         ],
         "tasks": [
             {
@@ -142,7 +202,11 @@ def records() -> list[GraderRecord]:
                         criterion_id=cid,
                         grader_fqn="metis.library.graders.CriterionJudgeGrader",
                         grader_args={"threshold": THRESHOLD, "model": "gpt-4o"},
-                        results=[RecordedResult(outcome=outcome, score=score, reason="scored")],
+                        results=[
+                            RecordedResult(
+                                outcome=outcome, score=score, reason="scored"
+                            )
+                        ],
                     )
                 )
     return out
@@ -156,8 +220,14 @@ def write_experiment(root: Path) -> EvaluationResults:
             trial_dir = root / "outputs/trials" / f"{tid}-{trial}"
             trial_dir.mkdir(parents=True)
             record = TrialRecord(
-                config=TrialConfig(task_id=tid, trial_index=trial, persona=persona, scenario=scenario),
-                outcome=TrialOutcome(stop_reason="goal_achieved", total_turns=3, duration_seconds=35.0),
+                config=TrialConfig(
+                    task_id=tid, trial_index=trial, persona=persona, scenario=scenario
+                ),
+                outcome=TrialOutcome(
+                    stop_reason="goal_achieved",
+                    simulated_turns_completed=3,
+                    duration_seconds=35.0,
+                ),
                 target_session_id=f"{tid}-{trial}",
             )
             (trial_dir / "record.json").write_text(record.model_dump_json())
@@ -184,7 +254,9 @@ CONVERSATIONS = {
 
 def save_conversation(root: Path, session_id: str, turn: tuple[str, str]) -> None:
     """Save one turn where `metis engine evaluate` puts a trial session's traces."""
-    root_obs = Observation(id="o1", trace_id="t1", type="SPAN", input=turn[0], output=turn[1])
+    root_obs = Observation(
+        id="o1", trace_id="t1", type="SPAN", input=turn[0], output=turn[1]
+    )
     trace = Trace(id="t1", session_id=session_id, observations=(root_obs,))
     path = root / execution_layout.TRACES / execution_layout.trace_file_name(session_id)
     SessionTraces.from_traces(session_id, [trace]).save(path)
@@ -219,7 +291,8 @@ def capture(html: Path, view: str, shot: Path, size: tuple[int, int]) -> None:
     page = html.with_name(f"{view}.html")
     page.write_text(
         html.read_text(encoding="utf-8").replace(
-            "</body>", f"<script>addEventListener('load',()=>{{{SETUP[view]}}})</script></body>"
+            "</body>",
+            f"<script>addEventListener('load',()=>{{{SETUP[view]}}})</script></body>",
         ),
         encoding="utf-8",
     )
@@ -254,7 +327,9 @@ def main() -> int:
             shot = root / f"{view}.png"
             capture(html, view, shot, size)
             image = Image.open(shot).convert("RGB").crop(tuple(v * 2 for v in box))
-            image = image.resize((1600, round(image.height * 1600 / image.width)), Image.LANCZOS)
+            image = image.resize(
+                (1600, round(image.height * 1600 / image.width)), Image.LANCZOS
+            )
             image.save(OUT / f"insights-{view}.webp", "WEBP", quality=82, method=6)
             print(OUT / f"insights-{view}.webp", image.size)
     finally:

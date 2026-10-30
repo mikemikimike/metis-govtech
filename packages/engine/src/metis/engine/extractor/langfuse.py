@@ -6,8 +6,8 @@ steps:
 1. A ``sessionId``-filtered call, following every cursor page, finds which trace ids exist.
 2. Each trace is then fetched in full with a ``traceId`` filter.
 
-The second step is required (issue #435). Orca's agents run on Agno, and OpenInference's Agno
-instrumentation writes its own session id to the ``session.id`` attribute of agent-run spans
+The second step is required. Some agent frameworks, Agno among them, break the session filter:
+OpenInference's Agno instrumentation writes its own session id to the ``session.id`` attribute of agent-run spans
 (``*.arun``), overwriting the Langfuse session id. A few other observations, such as a
 GENERATION ending a delegated subagent run, carry no session id at all. A ``sessionId`` filter
 silently drops both. A trace's own id and parent links are never touched, so a ``traceId``

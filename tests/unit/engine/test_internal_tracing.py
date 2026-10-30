@@ -185,8 +185,8 @@ def _simulate_one_trial(
 
     experiment_root = tmp_path / "refunds-20260101-000000"
     with (
-        patch("metis.engine.simulation.gen_1.trial.UserAgent", lambda **_kw: object()),
-        patch("metis.engine.simulation.gen_1.trial.Orchestrator") as orchestrator,
+        patch("metis.engine.simulation.trial.UserAgent", lambda **_kw: object()),
+        patch("metis.engine.simulation.trial.Orchestrator") as orchestrator,
     ):
         orchestrator.return_value = AsyncMock(execute=execute)
         asyncio.run(

@@ -244,7 +244,7 @@ def test_the_live_browser_check_loads_the_start_page(status: int, ok: bool) -> N
 
 
 @pytest.mark.parametrize("transport", list(ConnectionTransport))
-def test_the_export_names_the_gen_2_runner_and_a_binding_that_loads(
+def test_the_export_names_the_generic_runner_and_a_binding_that_loads(
     transport: ConnectionTransport,
 ) -> None:
     target = connection(transport)

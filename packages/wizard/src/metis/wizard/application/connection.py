@@ -47,12 +47,12 @@ if TYPE_CHECKING:
     from metis.wizard.domain.specification import Specification
 
 RUNNER_FACTORY_REFS: dict[ConnectionTransport, str] = {
-    ConnectionTransport.HTTP: "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory",
+    ConnectionTransport.HTTP: "metis.engine.simulation.runners.http.HttpRunnerFactory",
     ConnectionTransport.BROWSER: (
-        "metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory"
+        "metis.engine.simulation.runners.browser.BrowserRunnerFactory"
     ),
 }
-"""The gen_2 runner factory for each transport, as FQN strings. The Wizard never imports them."""
+"""The generic runner factory for each transport, as FQN strings. The Wizard never imports them."""
 
 TARGET_BINDING_FILE = export_layout.TARGET_BINDING.name
 """The binding file name, relative to `specification.yaml`."""
@@ -493,7 +493,7 @@ def set_connection(
 def connected_specification(
     specification: Specification, connection: TargetConnection | None
 ) -> Specification:
-    """The Specification to export: with a connection, it names the gen_2 runner and the binding.
+    """The Specification to export: with a connection, it names the generic runner and the binding.
 
     With no connection, the Specification is returned unchanged, so a spec-only export keeps
     the default runner.

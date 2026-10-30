@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target through a runner using LLM-powered simulated user personas. Two generic runners drive a target through its API or its web page. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -46,15 +46,14 @@ Copy the example environment file and fill in your credentials:
 cp .env.example .env
 ```
 
-Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca runner:
+Set Langfuse and OpenAI credentials, plus the variables your target binding names:
 
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | The Langfuse of the system under test. The engine reads the target's traces from it. The engine never traces its own model calls there. |
 | METIS-internal Langfuse (optional) | `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY`, `METIS_INTERNAL_LANGFUSE_BASE_URL` | Where the engine and the wizard trace their own model calls. Each trial attempt and each grader run is one trace, and a trial's traces share one session. Tracing is off unless all three are set. |
 | Models | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | The shared gateway of the user agent, the runner agent, and the judge. Each role can have its own model and gateway. See the [model guide](models.md). |
-| Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
-| Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
+| Target binding | for the example, `TOYAPP_API_URL` | The URL, key and login variables that the binding names. See the [simulation README](../../packages/engine/src/metis/engine/simulation/README.md). |
 
 Optional tuning variables:
 
@@ -85,40 +84,39 @@ Run the bundled example experiment to verify everything works end-to-end.
 
 ### The Example Experiment
 
-The directory `packages/engine/examples/gen_1-orca_api-1/` contains a small experiment definition written for Orca. The persona, task description, and grader selection assume Orca's API.
+The directory `packages/engine/examples/http-agentic_eval_toyapp-1/` contains a small experiment definition for the bundled toy app. The persona, task descriptions, and grader selection assume that app's API.
 
 ```
 examples/
-└── gen_1-orca_api-1/        # One Task, one Trial, one Grader, no uploaded files
+└── http-agentic_eval_toyapp-1/   # Three Tasks, one Trial each, no uploaded files
     ├── specification.yaml
+    ├── toyapp-api.yaml           # The target binding
     └── fixtures/
 ```
 
 ### Run It
 
-The commands below use `examples/gen_1-orca_api-1/`, which is small enough for a quick first run.
-The complete Orca specification, with 18 Tasks and 54 Trials, is in
-`packages/testbed/wizard/cases/orca/outputs/`.
+The commands below use `examples/http-agentic_eval_toyapp-1/`, which is small enough for a quick first run.
 
 ```bash
-metis engine run --input-dir packages/engine/examples/gen_1-orca_api-1/
+metis engine run --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 ```
 
 To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the output directory it created. `evaluate` scores the directory that you name:
 
 ```bash
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
-metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
+metis engine evaluate --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 ```
 
-`experiments/execute/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
+`experiments/execute/toyapp-http-simple-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
 If simulation stops before all runs finish, continue the output directory that you name. `simulate` prints this exact command, so you never retype a timestamp:
 
 ```bash
-metis engine simulate --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 # or run the remaining simulation and then evaluate everything:
-metis engine run --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine run --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 ```
 
 Resume reads the experiment and the fixtures from the frozen `inputs/` snapshot in the named directory, not from the source directory. It retries only missing, invalid, or `system_error` records, and appends to the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing. Passing `--resume` with `--input-dir` is an error: the message lists the outputs that exist for the experiment `id` and names the correct flag.
@@ -139,7 +137,7 @@ Evaluation uses a normal, non-full-screen progress bar:
 
 The combined `run` command closes the Simulation TUI before it starts the evaluation progress bar. It performs four phases:
 
-1. **Simulate** — the user agent interacts with Orca through the selected runner
+1. **Simulate** — the user agent interacts with the target through the selected runner
 2. **Extract** — traces are fetched from Langfuse
 3. **Evaluate** — graders score the extracted traces
 4. **Results** — grader results are written to `outputs/reports/results.json`; build the report with [`metis insights report`](insights.md)
@@ -149,7 +147,7 @@ The combined `run` command closes the Simulation TUI before it starts the evalua
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. The `outputs/reports/` directory is created by `evaluate` or `run`, which write `results.json`; `metis insights report` adds `report.json` and `report.html`. Simulation-only runs stop after `outputs/trials/` and `logs/`:
 
 ```text
-experiments/execute/orca-eval-20260730-143022/
+experiments/execute/toyapp-http-simple-20260730-143022/
 ├── inputs/
 │   ├── specification.yaml
 │   └── fixtures/
@@ -159,8 +157,8 @@ experiments/execute/orca-eval-20260730-143022/
 │   │       ├── record.json
 │   │       ├── simulate.log       # Link to the trial log
 │   │       ├── evidence/
-│   │       │   ├── llm_calls.jsonl  # One row per user-agent and summarizer LLM request
-│   │       │   └── log.jsonl        # One entry per request and response (gen_2 runners)
+│   │       │   ├── llm_calls.jsonl  # One row per user-agent and runner-agent LLM request
+│   │       │   └── log.jsonl        # One entry per request and response
 │   │       └── artifacts/
 │   │           ├── run-manifest.json
 │   │           └── ...
@@ -186,10 +184,10 @@ status, failure-evidence, and information-architecture rules.
 
 ### Debugging Tip
 
-For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the API runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory` and supply its credentials:
+For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the HTTP runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.browser.BrowserRunnerFactory` and supply its credentials:
 
 ```bash
-HEADED=true metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
+HEADED=true metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 ```
 
 ---
@@ -211,11 +209,12 @@ my-experiment/
 schema_version: 1
 
 id: my-evaluation
-runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+runner_factory_ref: metis.engine.simulation.runners.http.HttpRunnerFactory
+target_binding: toyapp-api.yaml
 target:
-  name: Orca
-  users: Programme managers and analysts.
-  description: Evaluate routing and analysis capabilities.
+  name: Employee Policy Assistant
+  users: Employees of a fictional company.
+  description: Answers employee policy questions from a fixed document collection.
 ```
 
 | Field | Required | Description |
@@ -443,7 +442,7 @@ The flags below are optional and apply to both modes:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/execute/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
+| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/execute/toyapp-http-simple-20260820-143000/`. It must hold an `inputs/` snapshot |
 | `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase evaluation logging verbosity |
 | `--quiet` | `false` | Suppress all output below ERROR |
@@ -456,23 +455,13 @@ The `--concurrency N` flag runs N simulation workers in parallel. The default is
 
 Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
 
-#### Playwright runner (browser-based)
+#### Browser runner
 
-Each worker gets its own browser context with an isolated login session and page. No shared state or cookie leakage between workers. All contexts share a single browser process.
+The factory launches one browser process and signs in once. Each trial gets its own browser context from that signed-in state, so no cookies or pages are shared between workers.
 
-#### API runner (OrcaApiRunner)
+#### HTTP runner
 
-Each worker gets a **fresh `OrcaApiRunner` per run**, not one for the worker's lifetime. The factory (`OrcaApiRunnerFactory`) mints a new runner for each run, which goes through `setup` → `send_turn` (repeated) → `teardown`, then is discarded. Within a single run, turns are strictly sequential — there is no intra-run parallelism.
-
-The factory owns three resources shared across all concurrent runners:
-
-| Resource | Purpose |
-|----------|---------|
-| `httpx.AsyncClient` | Single connection pool for all HTTP calls |
-| `SubmitRateLimiter` | Spaces submissions across all runners at the configured RPM (default: 6 RPM). Uses an `asyncio.Lock` so concurrent runners interleave in arrival order rather than racing. |
-| `FixtureLibrary` | Caches uploaded fixture file IDs. Uses a per-fixture-name `asyncio.Lock` so only one runner uploads a given fixture; others wait and reuse the cached ID. |
-
-The rate limiter is the key throttle: with `submit_rpm: 6`, all concurrent runners collectively share a budget of one submission every 10 seconds, regardless of the `--concurrency` value. Increasing concurrency overlaps polling and setup time across runs but does not increase submission throughput.
+Each worker gets a **fresh `HttpRunner` per trial**, not one for the worker's lifetime. The factory (`HttpRunnerFactory`) mints a new runner for each trial, which goes through `setup` → `act` (repeated) → `end_chat` → `teardown`, then is discarded. Within a trial, turns are strictly sequential: there is no intra-trial parallelism. The factory owns the one HTTP transport that all concurrent runners share.
 
 ### Verbosity
 
@@ -599,7 +588,7 @@ The affected session is marked failed with a message such as ``Session `sess-…
 
 ## Adapting to Your Target
 
-The bundled example targets Orca through its API runner. You can supply a custom runner for a REST API, WebSocket endpoint, browser UI, or another interface.
+The bundled example binds a small app to the generic HTTP runner with a YAML file. Write a custom runner only for a transport that neither generic runner speaks, such as a WebSocket endpoint.
 
 This section covers:
 1. Writing a custom `Runner` class
@@ -612,251 +601,156 @@ This section covers:
 
 The engine interacts with your target through two abstractions:
 
-- **`Runner`** — handles a single simulation attempt (one persona × one scenario). It translates messages and actions into transport-specific calls and returns observations.
-- **`RunnerFactory`** — manages shared resources (connection pools, browser instances) and creates fresh `Runner` instances per attempt.
+- **`Runner`** handles a single trial attempt (one persona × one scenario). It carries out one plain-language action per turn on the target and reports what happened.
+- **`RunnerFactory`** manages shared resources (connection pools, browser instances) and creates fresh `Runner` instances per attempt.
+
+The normative rules every runner must satisfy are in the [runner contract](../runner-contract.md).
 
 #### The Runner ABC
 
 Source: `packages/engine/src/metis/engine/simulation/runner.py`
 
 ```python
-from abc import ABC, abstractmethod
-from pathlib import Path
-
-from metis.engine.simulation.types import ChosenAction, Observation, RunConfig
-
-
 class Runner(ABC):
-    """Transport layer — connects the simulation to a target."""
+    ledger: ArtifactLedger  # bound by the orchestrator before setup()
+
+    @property
+    @abstractmethod
+    def session_id(self) -> str | None:
+        """The target's session ID, copied by code from a submission's answer."""
 
     @abstractmethod
-    async def setup(self, config: RunConfig) -> None:
-        """Prepare the connection (authenticate, open session).
-
-        Called once per attempt before the turn loop starts.
-        The config provides persona/scenario IDs and timeout settings.
-        """
+    async def setup(self, config: TrialConfig) -> None:
+        """Prepare the connection. `config` carries the trial's budget and deadline."""
 
     @abstractmethod
-    async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
-        """Deliver user message + chosen actions, return the target's response.
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
+        """Carry out one plain-language action and report what happened."""
 
-        - message: the text the simulated user sends
-        - actions: list of ChosenAction selected by the UserAgent from
-          the previous Observation's available_actions
-        - Returns: an Observation carrying the target's text reply, any
-          artifacts produced, one ActionResult per action in `actions`,
-          any turn-level notices, and the next set of available_actions.
-          See docs/runner-contract.md for the binding rules.
-        """
+    @abstractmethod
+    async def end_chat(self, promised: list[Promise]) -> None:
+        """The closing step: collect what the target made available. Not a turn."""
 
     @abstractmethod
     async def teardown(self) -> None:
-        """Clean up (close HTTP session, release resources).
-
-        Called once per attempt after the turn loop ends, even on failure.
-        """
-
-    @abstractmethod
-    async def get_session_id(self) -> str | None:
-        """Return the target's session identifier.
-
-        The engine stores this in the run record for trace extraction.
-        Return None if your target has no concept of sessions.
-        """
+        """Release what `setup` acquired."""
 ```
+
+The orchestrator calls `setup()` once, then `act()` once per turn until the user agent stops, then `end_chat()` for a healthy ending, then `teardown()` even on failure. The user agent writes each action in plain language. Text meant for the target sits between `⟦` and `⟧`, and a runner sends those spans word for word.
 
 #### Key Types
 
 These Pydantic models are defined in `metis.engine.simulation.types`:
 
-**`Observation`** — what the target returned after a turn:
-
 ```python
+class Reading(BaseModel):
+    outcome: str  # What the runner thinks happened
+    why: str
+    next_options: str = ""  # What the user could do next, if the runner has a view
+
+
 class Observation(BaseModel):
-    text: str = ""  # Target's text reply
-    artifacts: list[Artifact] = []  # Downloads/charts produced
-    action_results: list[ActionResult] = []  # One per action you were handed
-    response_notices: list[str] = []  # Turn-level problems, not per-action
-    available_actions: list[ActionSlot] | None = None  # Three-state: list/[]/None
-    status_labels: list[str] = []  # Status indicators shown in UI
+    reply: str | None  # The target's reply, copied by code. None when none was shown
+    reading: Reading  # The runner's own interpretation, kept apart from the facts
+    promised: list[str] = []  # Names of files the reply promised
+    observed: bool = True  # False when nobody could check the target after the action
+    notice: str | None = None  # A problem METIS itself found with the turn
+    submission_unresolved: bool = False  # A submission never settled
+    sent_nothing: bool = False  # The action quoted no message, so nothing was sent
 ```
 
-`action_results` is per-action and positional: `action_results[i]` is your
-verdict on `actions[i]`, and you owe exactly one row per action you were
-handed — a dropped action is a contract violation the engine will raise on.
-`response_notices` is for turn-level problems that belong to no single action.
-`available_actions` is three-state and the distinction is load-bearing: a list
-of slots means the runner looked and found these available; `[]` means the
-runner looked and found nothing; `None` means nobody looked. The rules are
-normative and live in [runner-contract.md](../runner-contract.md).
-
-**`ActionSlot`** — one available action discovered per-turn:
-
-```python
-class ActionSlot(BaseModel):
-    id: str  # Unique action identifier
-    kind: str  # Action type (e.g. "file_upload", "button")
-    label: str  # Human-readable label
-    options: list[str] | None = None  # Choices for select/radio actions
-```
-
-**`ChosenAction`** — an action the UserAgent selected from `available_actions`:
-
-```python
-class ChosenAction(BaseModel):
-    id: str  # Must match an ActionSlot.id from the observation
-    value: str | None = None  # Action payload (filename, form value, etc.)
-```
+Facts and interpretation stay apart: `reply` and `promised` are copied by code from what the transport recorded, and only `reading` holds the runner's opinion, which the user agent is told is an interpretation. A runner records every file it sends or receives through `self.ledger` (`record_upload`, `record_download`, `record_failure`).
 
 #### The RunnerFactory Protocol
 
 ```python
-from pathlib import Path
-from typing import Protocol
-
-from metis.engine.simulation.runner import Runner
-
-
 class RunnerFactory(Protocol):
-    """Factory that manages shared resources and creates Runner instances."""
-
     async def start(self) -> None:
         """Acquire shared resources (open connection pool, launch browser)."""
-        ...
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
-        """Create a fresh Runner for one attempt.
-
-        - run_dir: where the run's record.json will be written
-        - fixtures_dir: directory containing files selected by the Task
-        """
-        ...
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
+        """Create a fresh Runner for one attempt."""
 
     async def close(self) -> None:
         """Release shared resources."""
-        ...
 ```
 
-Additionally, the engine expects a `retry_defaults` property:
+The engine also expects a `retry_defaults` property that returns `(trial_max_retries, trial_retry_delay_seconds)`. It builds your factory with `factory_cls()`, or, when the class has a `from_specification(specification, inputs_dir)` classmethod, with the specification and the experiment's `inputs/` folder. `HttpRunnerFactory` and `BrowserRunnerFactory` use the second form to load their target binding.
+
+#### A Minimal Runner
+
+A runner for a target with one chat endpoint:
 
 ```python
-@property
-def retry_defaults(self) -> tuple[int, float]:
-    """Return (run_max_retries, run_retry_delay_seconds)."""
-    ...
-```
-
-The engine instantiates your factory with `factory_cls()` (no arguments). Read any configuration you need from environment variables in `__init__`.
-
-#### Complete REST API Runner Example
-
-Below is a complete, runnable implementation that drives a target exposing a JSON chat endpoint:
-
-```python
-"""REST API runner for a chat-based target."""
+"""A runner for a target with a single JSON chat endpoint."""
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import httpx
 
 from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
-    ActionResult,
-    ActionSlot,
-    ChosenAction,
-    Observation,
-    RunConfig,
-)
+from metis.engine.simulation.types import Observation, Promise, Reading
+from metis.engine.simulation.runners.spans import Spans
 
 
-class RestRunnerConfig:
-    """Configuration loaded from environment variables."""
-
-    def __init__(self, base_url: str, api_key: str):
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-
-
-class RestRunner(Runner):
-    """Drives a target via its REST API."""
-
-    def __init__(self, config: RestRunnerConfig, fixtures_dir: Path) -> None:
-        self._config = config
-        self._fixtures_dir = fixtures_dir
+class ChatRunner(Runner):
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
-        self._session_id: str | None = None
+        self._session: str | None = None
 
-    async def setup(self, config: RunConfig) -> None:
-        self._client = httpx.AsyncClient(
-            base_url=self._config.base_url,
-            headers={"Authorization": f"Bearer {self._config.api_key}"},
-            timeout=config.response_wait_ms / 1000,
-        )
-        # Create a new session on the target
-        resp = await self._client.post("/sessions", json={"persona": config.persona})
-        resp.raise_for_status()
-        self._session_id = resp.json()["session_id"]
+    @property
+    def session_id(self) -> str | None:
+        return self._session
 
-    async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
+    async def setup(self, config) -> None:
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=60)
+
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
         assert self._client is not None
-        payload = {
-            "session_id": self._session_id,
-            "message": message,
-            "actions": [a.model_dump() for a in actions],
-        }
-        resp = await self._client.post("/chat", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-
-        # Parse available_actions: if the API returns the field, use it (even if []);
-        # if the API does not report available_actions, return None.
-        available_actions = None
-        if "available_actions" in data:
-            available_actions = [ActionSlot(**a) for a in data["available_actions"]]
-
+        spans = Spans.of(action)
+        if not spans.texts:
+            return Observation(
+                reply=None,
+                reading=Reading(
+                    outcome="not_sent", why="The action quoted no message."
+                ),
+                sent_nothing=True,
+            )
+        response = await self._client.post("/chat", json={"message": spans.texts[0]})
+        response.raise_for_status()
+        data = response.json()
+        self._session = data.get("session_id", self._session)
         return Observation(
-            text=data.get("reply", ""),
-            available_actions=available_actions,
-            # One row per action, in the order you were handed them. Here the
-            # example target accepts or rejects them wholesale, so every row
-            # carries the same verdict; a real runner reports each separately.
-            action_results=[
-                ActionResult(action_index=i, succeeded=True)
-                for i in range(len(actions))
-            ],
-            response_notices=data.get("notices", []),
+            reply=data.get("reply"),
+            reading=Reading(outcome="replied", why="The target answered."),
         )
+
+    async def end_chat(self, promised: list[Promise]) -> None:
+        pass
 
     async def teardown(self) -> None:
         if self._client:
             await self._client.aclose()
 
-    async def get_session_id(self) -> str | None:
-        return self._session_id
 
-
-class RestRunnerFactory:
-    """Factory for REST-based runners."""
-
+class ChatRunnerFactory:
     def __init__(self) -> None:
         import os
 
-        base_url = os.environ["TARGET_API_URL"]
-        api_key = os.environ["TARGET_API_KEY"]
-        self._config = RestRunnerConfig(base_url=base_url, api_key=api_key)
+        self._base_url = os.environ["TARGET_API_URL"]
 
     @property
     def retry_defaults(self) -> tuple[int, float]:
         return (2, 5.0)
 
     async def start(self) -> None:
-        pass  # No shared resources needed for HTTP
+        pass
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
-        return RestRunner(config=self._config, fixtures_dir=fixtures_dir)
+    async def create(self, run_dir, fixtures_dir, experiment_root) -> ChatRunner:
+        return ChatRunner(self._base_url)
 
     async def close(self) -> None:
         pass
@@ -866,13 +760,11 @@ class RestRunnerFactory:
 
 Before writing your runner:
 
-1. **Understand the turn loop.** The engine calls `setup()` once, then alternates `send_turn()` until the UserAgent decides to stop, then calls `teardown()`. Your runner must be stateful enough to maintain a conversation session across turns.
+1. **Understand the turn loop.** The engine calls `setup()` once, then `act()` once per turn until the user agent decides to stop, then `teardown()`. Your runner must keep a conversation session across turns.
 
-2. **Return meaningful `available_actions`.** The UserAgent can only select from actions you surface in the `Observation`. If your target has buttons, file uploads, or forms, expose them as `ActionSlot` entries. If it's purely text-based, return an empty list — `[]` means "I looked and there is nothing on offer", which is different from `None`, meaning "I did not look". Return `None` only on a path where you genuinely never inspected the target's state.
+2. **Handle fixtures through the ledger.** When a Task lists fixture files, the trial holds them already. A runner that uploads one records it with `self.ledger.record_upload`. A fixture that is never uploaded ends the trial as `system_error`.
 
-3. **Handle `fixtures_dir`.** When a Task lists fixture files and the UserAgent chooses a `file_upload` action, the file path is relative to `fixtures_dir`. Your runner must handle uploading it (multipart POST, base64 encoding, etc.).
-
-4. **Return a session ID.** The engine uses this for Langfuse trace extraction in the evaluation phase. If your target doesn't use Langfuse, return `None` — but evaluation will then be unavailable (see [Langfuse Requirement](#langfuse-requirement)).
+3. **Return a session ID.** The engine uses it for Langfuse trace extraction in the evaluation phase. If your target does not use Langfuse, return `None`, but evaluation will then be unavailable (see [Langfuse Requirement](#langfuse-requirement)).
 
 ### Wiring Your Runner into the Engine
 
@@ -913,7 +805,7 @@ Criterion `AC-CHAT-1`.
 
 The value is a fully-qualified Python name pointing to your `RunnerFactory` class. The engine resolves it at load time using `importlib.import_module` — if the import fails or the class lacks `start`, `create`, or `close` methods, validation raises an error immediately.
 
-`runner_factory_ref` is a required field — the engine does not default to any runner. You must always specify which `RunnerFactory` to use.
+`runner_factory_ref` defaults to `metis.engine.simulation.runners.http.HttpRunnerFactory`. A browser target names `metis.engine.simulation.runners.browser.BrowserRunnerFactory`, and a custom runner names its own factory.
 
 #### Resolution Logic
 
@@ -941,7 +833,7 @@ If your target is not browser-based:
 
 1. **Playwright is optional.** A runner that does not use a browser does not need the Playwright extra.
 
-2. **Set credentials for the selected runner.** The Orca API runner needs `ORCA_API_URL` and `ORCA_API_KEY`. The Orca browser runner needs `ORCA_URL`, `ORCA_USERNAME`, and `ORCA_PASSWORD`. A custom runner reads its own variables.
+2. **Set the variables for the selected runner.** A generic runner reads the variables its target binding names. A custom runner reads its own.
 
 3. **Your `.env` only needs your own variables** plus the ones required by the engine core:
    - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — needed if you want evaluation (trace extraction)
@@ -983,7 +875,7 @@ the grader configuration used for each Criterion.
 The [JSON Schema](../../packages/core/schemas/specification.schema.json) provides
 editor completion and shape validation. The engine also checks references and
 coverage when it loads the document. From a specification in
-`packages/engine/examples/gen_1-orca_api-1/`, use this editor directive:
+`packages/engine/examples/http-agentic_eval_toyapp-1/`, use this editor directive:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/specification.schema.json
@@ -1113,7 +1005,7 @@ a grader before the engine can load the specification.
 
 ### Langfuse Requirement
 
-The `evaluate` command requires that your target writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
+The `evaluate` command requires that your target writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID in `Runner.session_id` to fetch traces from Langfuse, then feeds them to your configured graders.
 
 #### What This Means in Practice
 
@@ -1151,7 +1043,7 @@ If you want evaluation, instrument your target with the Langfuse SDK:
 1. Add `langfuse` to your target's dependencies
 2. Wrap your LLM calls with Langfuse's `@observe` decorator or use the callback handler
 3. Ensure each conversation session gets a consistent `session_id`
-4. Return that `session_id` from your runner's `get_session_id()` method
+4. Return that `session_id` from your runner's `session_id` property
 
 The engine then fetches traces using:
 - `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASE_URL` from your `.env`
@@ -1250,7 +1142,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 Start with the minimal template above, verify it runs end-to-end, then layer in complexity:
 
-1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner handles `file_upload` actions
+1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner records each upload in the ledger
 2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, select each one in a Task through `persona_ref`
 3. **Add graders** — start with code-graded graders (fast, deterministic), then add judge-graded graders
 4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Behaviours in Tasks

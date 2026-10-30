@@ -176,7 +176,7 @@ def test_init_in_run_mode_writes_a_checked_binding_and_no_secret(
     assert "✓ server: the API server answers" in result.output
     specification = yaml.safe_load((root / "outputs/specification.yaml").read_text())
     assert specification["runner_factory_ref"] == (
-        "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory"
+        "metis.engine.simulation.runners.http.HttpRunnerFactory"
     )
     assert specification["target_binding"] == "target-binding.yaml"
     binding = (root / "outputs/target-binding.yaml").read_text()
@@ -250,7 +250,7 @@ def test_connect_adds_a_binding_to_a_spec_only_export(
     assert connected.exit_code == 0, connected.output
     specification = yaml.safe_load((root / "outputs/specification.yaml").read_text())
     assert specification["runner_factory_ref"] == (
-        "metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory"
+        "metis.engine.simulation.runners.browser.BrowserRunnerFactory"
     )
     assert (root / "outputs/target-binding.yaml").is_file()
 

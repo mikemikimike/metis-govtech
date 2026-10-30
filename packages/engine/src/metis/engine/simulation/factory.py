@@ -1,4 +1,4 @@
-"""RunnerFactory protocol — the lifecycle every generation's factory shares."""
+"""RunnerFactory protocol — the lifecycle every runner factory shares."""
 
 from __future__ import annotations
 
@@ -14,17 +14,13 @@ class RunnerFactory(Protocol):
     Implementations own the lifecycle of expensive shared state (e.g., a
     browser process) and produce fresh Runner instances per attempt.
 
-    A factory may set a class attribute ``generation`` naming the simulator
-    generation its runners belong to. A factory without one is ``"gen_1"``.
-    The attribute is optional, so it is not declared here.
+    A factory may define a classmethod ``from_specification(specification, inputs_dir)``.
+    ``metis engine simulate`` then builds it with the specification and the experiment's
+    ``inputs/`` folder instead of with no arguments. It is optional, so it is not declared
+    here.
 
-    A factory may also define a classmethod
-    ``from_specification(specification, inputs_dir)``. ``metis engine simulate`` then
-    builds it with the specification and the experiment's ``inputs/`` folder instead of
-    with no arguments. It is optional too, so it is not declared here.
-
-    Each generation narrows ``create`` to its own ``Runner`` type (for
-    ``gen_1``, ``gen_1.runner.Gen1RunnerFactory``).
+    ``create`` returns a :class:`metis.engine.simulation.runner.Runner`; it is typed
+    ``object`` here so this module does not import the runner.
     """
 
     async def start(self) -> None:

@@ -93,9 +93,7 @@ class Experiment(BaseModel):
     """The Test Cases and settings used to execute an evaluation."""
 
     id: str = ""
-    runner_factory_ref: str = (
-        "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
-    )
+    runner_factory_ref: str = "metis.engine.simulation.runners.http.HttpRunnerFactory"
     target_binding: RelativePath | None = None
     """The ``TargetBinding`` file the generic runner reads, relative to ``specification.yaml``."""
     defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)

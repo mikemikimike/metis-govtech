@@ -166,7 +166,6 @@ def test_one_command_records_every_configured_case(
     )
 
     assert [result.case_id for result in record.cases] == [
-        "orca",
         "enterprise-ai-assistant",
         "travel-planner-langgraph",
         "billing-support",
@@ -184,8 +183,8 @@ def test_one_command_records_every_configured_case(
     assert (
         output / "cases/travel-planner-langgraph/generated-specification.yaml"
     ).is_file()
-    assert record.cases[1].events[0].operation == "start"
-    assert record.cases[1].events[1].operation == "end"
+    assert record.cases[0].events[0].operation == "start"
+    assert record.cases[0].events[1].operation == "end"
     assert all(
         item.description.startswith("Product information for ")
         for item in target.evidence
@@ -269,7 +268,9 @@ def test_saved_versions_compare_the_latest_execution(
 
     assert comparison.older_id == "20261014T000000Z"
     assert comparison.newer_id == "20261015T000000Z"
-    assert set(comparison.changes.values()) == {0.0}
+    # No reference has reviewed graders, so that level has nothing to compare.
+    assert comparison.changes["graders"] is None
+    assert {v for k, v in comparison.changes.items() if k != "graders"} == {0.0}
 
 
 def test_structured_failure_is_saved_with_diagnostic_specification(

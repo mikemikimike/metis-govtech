@@ -34,10 +34,6 @@ In-memory drafts can use defaults. Engine execution adds validation of reference
 
 ## Version policy
 
-On `next`, keep schema versions at `1`. Record breaking changes in `MIGRATION.md`
-and `CHANGELOG.next.md`.
-
-After graduation, a change that prevents valid existing data from loading requires a
-version bump. Update the root model's version constant and `Literal` field, including
-when the breaking change is in a nested model. CI does not detect missing version bumps.
-See the [version policy](../../../docs/version-maintenance.md).
+A change that prevents valid existing data from loading requires a version bump. Update
+the root model's version constant and `Literal` field, including when the breaking change
+is in a nested model. CI does not detect missing version bumps.

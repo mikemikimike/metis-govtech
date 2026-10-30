@@ -1,1 +1,1 @@
-"""PlatformAI chat and embedding adapter."""
+"""LLM gateway chat and embedding adapter."""

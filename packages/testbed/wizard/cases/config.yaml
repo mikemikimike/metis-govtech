@@ -2,7 +2,6 @@ id: wizard-product-specifications
 version: 1
 component: wizard
 cases:
-- orca
 - enterprise-ai-assistant
 - travel-planner-langgraph
 - billing-support

@@ -96,13 +96,10 @@ class TestSpecificationExecution:
         )
 
     def test_simple_example_loads(self, repo_root: Path) -> None:
-        """The runnable example must load for execution.
-
-        The full example is not runnable while most of its Criteria have no grader (#428);
-        tests/unit/engine/test_runner_ref.py pins exactly which ones.
-        """
+        """The toy app example must load for execution."""
         path = (
-            repo_root / "packages/engine/examples/gen_1-orca_api-1/specification.yaml"
+            repo_root
+            / "packages/engine/examples/http-agentic_eval_toyapp-1/specification.yaml"
         )
         specification = Specification.model_validate(yaml.safe_load(path.read_text()))
-        assert specification.id == "orca-simple"
+        assert specification.id == "toyapp-http-simple"

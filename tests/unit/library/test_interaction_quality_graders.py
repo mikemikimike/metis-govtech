@@ -38,7 +38,7 @@ from metis.library.taxonomy import (
     Scope,
 )
 from tests.fixtures.criterion_judge import judge_client
-from tests.fixtures.traces import load_orca_session
+from tests.fixtures.traces import load_session
 
 if TYPE_CHECKING:
     from metis.core.grading import GraderResult
@@ -323,8 +323,8 @@ def test_missing_evidence_is_errored_without_a_judge_call(
 
 
 @pytest.mark.parametrize("grader_cls", GRADERS)
-def test_judges_the_captured_orca_session(grader_cls) -> None:
-    [result], [request] = grade(grader_cls, load_orca_session())
+def test_judges_the_helpdesk_session(grader_cls) -> None:
+    [result], [request] = grade(grader_cls, load_session())
 
     assert result.status == "scored"
     _, evidence = system_and_evidence(request)

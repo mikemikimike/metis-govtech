@@ -1,1 +1,1 @@
-"""Runner implementations for different transport layers."""
+"""The generic runners."""
