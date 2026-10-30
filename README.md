@@ -20,88 +20,15 @@
 
 ## Table of Contents
 
-- [Status](#status)
-- [Architecture](#architecture)
 - [Quickstart](#quickstart)
 - [Development](#development)
+- [Architecture](#architecture)
+- [Status](#status)
 - [Project Layout](#project-layout)
 - [Versioning](#versioning)
 - [Maintainers and contact](#maintainers-and-contact)
 - [Security](#security)
 - [License](#license)
-
-## Status
-
-**Beta.** METIS `1.0.0b1` is a labelled snapshot of the `next` branch, not a stable
-release. v1 is not finished.
-
-- **No compatibility between betas.** Anything can change from one beta to the next, including
-  command-line options, Python APIs, and the HTTP API.
-- **Files written by a beta may not load in v1**, because every `schema_version` is set to 2 at
-  the v1 launch.
-- **Support is best-effort.** We read issues and pull requests, but we do not promise response
-  times. See [what to expect](CONTRIBUTING.md#support-and-contributions-during-the-beta).
-
-### Feature status
-
-The beta supports one path: the toy app in
-[`agentic-eval-toyapp`](https://github.com/govtech-responsibleai/agentic-eval-toyapp), then
-Langfuse, then `metis wizard`, then `metis engine`, then `metis insights`. Everything off that
-path is experimental. We give no dates for individual features.
-
-| Feature | Status |
-|---------|--------|
-| Toy app traces through Langfuse | Supported |
-| `metis wizard` | Supported |
-| `metis engine` (command line) | Supported |
-| `metis insights` | Supported |
-| Engine API server | Not built |
-| Web client (`apps/web`) | Incomplete |
-
-*Supported* means the path is meant to work end to end, and a break on it is a bug. *Experimental*
-means it may be missing, partial, or change without notice. *Not built* means no code exists yet.
-Because the engine API server and the web client are unfinished, the HTTP and web surfaces may
-break between betas.
-
-## Architecture
-
-```
-                        ┌─────────────┐
-                        │  METIS-web  │
-                        └──────┬──────┘
-                               │ HTTP
-                        ┌──────▼──────┐
-                        │  METIS-api  │
-                        └──────┬──────┘
-                               │
-       ┌───────────────────────┼───────────────────────┐
-       │                       │                       │
-┌──────▼──────┐   ┌───────────▼───────────┐   ┌──────▼──────┐
-│ METIS-wizard│   │     METIS-engine      │   │METIS-insights│
-│  Config Gen │   │  Evaluation Runtime   │   │  Analytics   │
-└──────┬──────┘   └───────────────────────┘   └──────┬──────┘
-       │                       │                     │
-       │               ┌──────▼──────┐               │
-       └──────────────►│METIS-library │◄─────────────┘
-                       │   Catalog    │
-                       └──────┬──────┘
-                              │
-                       ┌──────▼──────┐
-                       │  METIS-core │
-                       │Domain Schemas│
-                       └─────────────┘
-```
-
-| Package | Description |
-|---------|-------------|
-| [**metis-core**](packages/core/) | Domain schemas and standard interfaces |
-| [**metis-library**](packages/library/) | Shared catalog — metrics, skills, and reusable components |
-| [**metis-engine**](packages/engine/) | Evaluation runtime; ingests traces and executes metrics |
-| [**metis-wizard**](packages/wizard/) | Interactive evaluation config generator |
-| [**metis-insights**](packages/insights/) | Report generation from evaluation results |
-| [**metis-testbed**](packages/testbed/) | Human-reviewed Wizard evaluation cases and reference Specifications |
-
-For the full specification see [docs/architecture.md](docs/architecture.md).
 
 ## Quickstart
 
@@ -142,33 +69,57 @@ make ci             # full CI suite
 make clean          # remove generated/cached files
 ```
 
-## Logging & Console Output
+## Architecture
 
-All packages use centralized logging and console output from `metis-core`:
-
-```python
-from metis.core.logging import get_logger
-from metis.core.console import console
-
-# Operational logging (stderr) — for developers and CI
-log = get_logger()
-log.info("evaluation_started", trace_id="abc-123", metrics_count=5)
-
-# User-facing output (stdout) — for end users
-console.print("[bold]Results:[/bold] 4 passed, 1 failed")
+```
+                        ┌─────────────┐
+                        │  METIS-web  │
+                        └──────┬──────┘
+                               │ HTTP
+                        ┌──────▼──────┐
+                        │  METIS-api  │
+                        └──────┬──────┘
+                               │
+       ┌───────────────────────┼───────────────────────┐
+       │                       │                       │
+┌──────▼──────┐   ┌────────────▼──────────┐   ┌────────▼─────┐
+│ METIS-wizard│   │     METIS-engine      │   │METIS-insights│
+│  Config Gen │   │  Evaluation Runtime   │   │  Analytics   │
+└──────┬──────┘   └───────────────────────┘   └──────┬───────┘
+       │                      │                      │
+       │               ┌──────▼───────┐              │
+       └──────────────►│METIS-library │◄─────────────┘
+                       │   Catalog    │
+                       └──────┬───────┘
+                              │
+                       ┌──────▼───────┐
+                       │  METIS-core  │
+                       │Domain Schemas│
+                       └──────────────┘
 ```
 
-Verbosity is controlled via CLI flags:
+| Package | Description |
+|---------|-------------|
+| [**metis-core**](packages/core/) | Domain schemas and standard interfaces |
+| [**metis-library**](packages/library/) | Shared catalog — metrics, skills, and reusable components |
+| [**metis-engine**](packages/engine/) | Evaluation runtime; ingests traces and executes metrics |
+| [**metis-wizard**](packages/wizard/) | Interactive evaluation config generator |
+| [**metis-insights**](packages/insights/) | Report generation from evaluation results |
+| [**metis-testbed**](packages/testbed/) | Human-reviewed Wizard evaluation cases and reference Specifications |
 
-```bash
-metis engine simulate --input-dir ./exp       # simulation only; writes run records
-metis engine evaluate --experiment-dir ./experiments/exp-20260820-143000  # score the output that simulate wrote
-metis engine run --input-dir ./exp            # simulation + evaluation + report
-metis engine run --input-dir ./exp -v         # INFO: operational progress
-metis engine run --input-dir ./exp -vv        # DEBUG: full diagnostics
-```
+For the full specification see [docs/architecture.md](docs/architecture.md).
 
-Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file.
+## Status
+
+**Beta.** METIS `1.0.0b1` is a labelled snapshot of the `next` branch, not a stable
+release. v1 is not finished.
+
+- **No compatibility between betas.** Anything can change from one beta to the next, including
+  command-line options, Python APIs, and the HTTP API.
+- **Files written by a beta may not load in v1**, because every `schema_version` is set to 2 at
+  the v1 launch.
+- **Support is best-effort.** We read issues and pull requests, but we do not promise response
+  times. See [what to expect](CONTRIBUTING.md#support-and-contributions-during-the-beta).
 
 ## Project Layout
 
