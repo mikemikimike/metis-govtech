@@ -39,7 +39,8 @@ release. v1 is not finished.
   command-line options, Python APIs, and the HTTP API.
 - **Files written by a beta may not load in v1**, because every `schema_version` is set to 2 at
   the v1 launch.
-- **Support is best-effort.** We read issues and pull requests, but we do not promise response times.
+- **Support is best-effort.** We read issues and pull requests, but we do not promise response
+  times. See [what to expect](CONTRIBUTING.md#support-and-contributions-during-the-beta).
 
 ### Feature status
 
