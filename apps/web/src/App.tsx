@@ -40,7 +40,6 @@ import {
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
 import {
-  ModelBanner,
   START_BLOCKED,
   interviewReady,
   RunSettings,
@@ -307,8 +306,8 @@ export function App() {
   }, [record?.id]);
 
   useEffect(() => {
-    // The banner is advice. A failed request shows no banner; the Interview routes still
-    // report missing settings themselves.
+    // A failed request leaves the statuses empty; the Interview routes still report missing
+    // settings themselves.
     void api.models().then(setModelStatuses, () => setModelStatuses([]));
   }, []);
 
@@ -835,8 +834,6 @@ export function App() {
         />
       )}
       <main className="flex min-w-0 flex-1 flex-col">
-        {/* The manual form calls no model, so the embeddings banner does not apply to it. */}
-        {!manualOpen && <ModelBanner statuses={modelStatuses} />}
         {error && (
           <Banner
             message={error}

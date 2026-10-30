@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 API_ROLES = (ModelRole.INTERVIEW,)
-"""The roles that the API cannot run an Interview without. Embeddings are optional."""
+"""The roles that the API cannot run an Interview without."""
 
 
 class SettingsError(RuntimeError):
@@ -128,10 +128,7 @@ def build_dependencies(settings: Settings) -> WizardDependencies:
 
     from metis.wizard import configure_interview_runtime, handle_interview
 
-    configure_interview_runtime(
-        interview=settings.role(ModelRole.INTERVIEW),
-        embeddings=settings.role(ModelRole.EMBEDDINGS),
-    )
+    configure_interview_runtime(interview=settings.role(ModelRole.INTERVIEW))
     return WizardDependencies(interview_handler=handle_interview)
 
 

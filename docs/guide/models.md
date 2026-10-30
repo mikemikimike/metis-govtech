@@ -1,14 +1,13 @@
 # Choose the models
 
-METIS uses an LLM in four steps of the flow. All roles can share one OpenAI-compatible gateway, so
+METIS uses an LLM in three steps of the flow. All roles can share one OpenAI-compatible gateway, so
 a basic setup needs only three lines in `.env`.
 
 ## Where METIS uses a model
 
 | Step | Role | Recommended model | Effect on scores |
 |---|---|---|---|
-| Interview | Interview | A capable reasoning model. The quality of the test configuration depends on this model. | No |
-| Grader matching | Embeddings | An embedding model. | No |
+| Interview, including grader matching | Interview | A capable reasoning model. The quality of the test configuration depends on this model. | No |
 | Simulation | User agent | A capable reasoning model. It must act like a realistic user. | Yes |
 | Simulation, generic runners | Runner agent | A capable reasoning model. It chooses the calls or page actions that carry out each user action. | Yes |
 | Grading | Judge | A fast, lightweight decision model by default, because it runs for each criterion and each conversation. Use a capable reasoning model if the budget allows it. | Yes |
@@ -42,7 +41,6 @@ JUDGE_MODEL=your-judge-model   # the judge only
 | Role | Model | API key | Base URL |
 |---|---|---|---|
 | Interview | `INTERVIEW_MODEL` | `INTERVIEW_API_KEY` | `INTERVIEW_BASE_URL` |
-| Embeddings | `EMBEDDING_MODEL` (default `text-embedding-3-large`) | `EMBEDDING_API_KEY` | `EMBEDDING_BASE_URL` |
 | User agent | `USER_AGENT_MODEL` | `USER_AGENT_API_KEY` | `USER_AGENT_BASE_URL` |
 | Runner agent | `RUNNER_AGENT_MODEL` (default: the user agent model) | `RUNNER_AGENT_API_KEY` | `RUNNER_AGENT_BASE_URL` |
 | Judge | `JUDGE_MODEL` | `JUDGE_API_KEY` | `JUDGE_BASE_URL` |
@@ -56,8 +54,8 @@ JUDGE_BASE_URL=https://judge-provider/v1
 JUDGE_MODEL=judge-model-from-another-family
 ```
 
-Without an embeddings key, the Interview still runs, but the Wizard cannot match Criteria to
-library graders. Each Criterion then uses the criterion judge.
+The Interview model also matches each Criterion to a library grader. If that call fails, the
+Interview still runs, and each new Criterion uses the criterion judge.
 
 `metis wizard`, `metis engine`, and the API all read the same `.env`. They use the first `.env`
 in the working directory or a directory above it, up to the project root. Set `METIS_ENV_FILE` to

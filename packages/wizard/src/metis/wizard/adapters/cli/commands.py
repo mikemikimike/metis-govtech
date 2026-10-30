@@ -102,27 +102,14 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
     return factory()
 
 
-def _warn_without_embeddings() -> None:
-    """Say once that grader matching is off when the embeddings role has no key."""
-    import os
-
-    from metis.wizard.application.matching import embeddings_warning
-
-    warning = embeddings_warning(os.environ)
-    if warning is not None:
-        typer.echo(f"Warning: {warning}", err=True)
-
-
 def _matcher(interviewer: Interviewer) -> object:
-    """The grader matcher, wired to the same gateway.
+    """The grader matcher, on the same gateway as the Interview.
 
     Every Criterion needs a Grader before the specification can be exported.
-
-    One gateway serves both chat and embeddings, so the interviewer *is* the embedder.
     """
-    from metis.wizard.application.matching import EmbeddingMatcher
+    from metis.wizard.application.matching import GraderMatcher
 
-    return EmbeddingMatcher(embedder=interviewer)  # type: ignore[arg-type]
+    return GraderMatcher(selector=interviewer)  # type: ignore[arg-type]
 
 
 def version_callback(value: bool) -> None:
@@ -495,7 +482,6 @@ def init(
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
-    _warn_without_embeddings()
 
     from metis.wizard.adapters.cli.opening import (
         read_capability_evidence,
@@ -716,7 +702,6 @@ def resume(
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
-    _warn_without_embeddings()
 
     typer.echo(f"Resuming at the {state.pending.stage} step.")
 

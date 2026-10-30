@@ -57,17 +57,12 @@ class GraderSpec(BaseModel):
     # args_model fields seed the Criterion parameters for user review.
     params: list[GraderParam] = Field(default_factory=list)
     # The grader takes its instructions from the criterion description, so it fits any
-    # criterion and is never a similarity match.
+    # criterion and the matcher never offers it.
     uses_criterion_description: bool = False
     # The taxonomy values the grader declares. None when the grader declares none.
     taxonomy: GraderTaxonomy | None = None
     # Every key a Criterion can set: the base settings, then the grader's own settings.
     settings: list[GraderSetting] = Field(default_factory=list)
-
-    @property
-    def match_text(self) -> str:
-        """What the matcher embeds for this grader."""
-        return f"{self.name}. {self.description}"
 
 
 class GraderSummary(BaseModel):

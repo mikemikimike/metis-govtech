@@ -1,144 +1,167 @@
-"""Criterion prose → grader FQN, by embedding similarity.
+"""Criterion → grader FQN, by one model call over the grader library.
 
-A separate pass, not folded into criteria generation, for two reasons: the catalogue may grow
-large enough to need retrieval rather than a prompt, and a swappable matcher can be replaced
-with an LLM-based one later without touching how criteria are written.
-
-Below the threshold, a single parameterised judge built from the criterion text — no codegen,
-no generated files. That fallback is what makes a dead embedding provider a degraded
-experiment rather than a stopped interview.
+The matcher is a separate call. The model that drafts a Criterion never writes its grader, so the
+patch rule that forbids `grader_fqn` stays true. The model reads the library graders under their
+Measures and suggests one grader for each Criterion, or no grader. No grader, an FQN that is not
+offered, or a failed call gives the criterion judge, which takes its instructions from the
+Criterion description. So a failed call degrades the experiment and never stops the Interview.
 """
 
 from __future__ import annotations
 
 import inspect
-import math
+import json
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
-from metis.core.model_settings import MODEL_GUIDE, ModelRole, missing_settings
+from metis.core.logging import get_logger
 from metis.library.grader import Grader, JudgeArgs, criterion_judge_args
+from metis.wizard.application import prompts
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable
 
     from metis.wizard.contracts.grader_spec import GraderSpec
-    from metis.wizard.domain.specification import Criterion, Specification
+    from metis.wizard.contracts.output import GraderChoices
+    from metis.wizard.domain.specification import Behaviour, Criterion, Specification
 
-# The grader the matcher selects when no specific grader fits a criterion.
+# The grader the matcher selects when no library grader fits a criterion.
 CRITERION_JUDGE_FQN = "metis.library.graders.CriterionJudgeGrader"
 
-EMBEDDINGS_WARNING = (
-    "Embeddings: no key is set ({names}). The Interview runs, but each Criterion uses the "
-    "criterion judge, because the Wizard cannot match it to a library grader. See {guide}."
-)
+logger = get_logger(__name__)
 
 
-def embeddings_warning(env: Mapping[str, str]) -> str | None:
-    """The warning text when the embeddings role has no key, else ``None``.
-
-    Embeddings only match Criteria to library graders. Without them the matcher uses the
-    criterion judge, so a missing key is a warning and never stops the Interview.
-    """
-    missing = missing_settings((ModelRole.EMBEDDINGS,), env)
-    if not missing:
-        return None
-    return EMBEDDINGS_WARNING.format(
-        names=" or ".join(missing[ModelRole.EMBEDDINGS]), guide=MODEL_GUIDE
-    )
+class GraderSelector(Protocol):
+    def select_graders(
+        self,
+        prompt: prompts.ModelPrompt,
+        offered: set[str],
+        criterion_ids: set[str],
+    ) -> GraderChoices: ...
 
 
-# TODO: Validate this threshold with the evals testbed once more graders are available.
-DEFAULT_THRESHOLD = 0.62
+def check_grader_choices(
+    choices: GraderChoices, offered: set[str], criterion_ids: set[str]
+) -> None:
+    """Raise ``ValueError`` when the reply names an FQN or a Criterion that the call did not send."""
+    returned = [choice.criterion_id for choice in choices.choices]
+    problems = []
+    if missing := criterion_ids - set(returned):
+        problems.append(
+            f"Give one choice for each Criterion: {', '.join(sorted(missing))}."
+        )
+    if unknown := set(returned) - criterion_ids:
+        problems.append(f"Unknown Criterion IDs: {', '.join(sorted(unknown))}.")
+    if len(returned) != len(set(returned)):
+        problems.append("Give only one choice for each Criterion.")
+    if not_offered := {c.grader for c in choices.choices if c.grader} - offered:
+        problems.append(
+            f"Use only an offered grader FQN or null: {', '.join(sorted(not_offered))}."
+        )
+    if problems:
+        raise ValueError(" ".join(problems))
 
 
-class Embedder(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]: ...
-
-
-def cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
-    return dot / norm if norm else 0.0
+def _criterion_payload(
+    criterion: Criterion, behaviour: Behaviour | None
+) -> dict[str, Any]:
+    return {
+        "id": criterion.id,
+        "name": criterion.name,
+        "description": str(criterion.description),
+        "behaviour": (
+            {"name": behaviour.name, "description": behaviour.description}
+            if behaviour is not None
+            else None
+        ),
+    }
 
 
 @dataclass
-class EmbeddingMatcher:
-    """Best cosine match above a threshold, or the criterion judge."""
+class GraderMatcher:
+    """Ask the model for the library grader that fits each Criterion, or the criterion judge."""
 
-    embedder: Embedder
+    selector: GraderSelector
     specs: list[GraderSpec] = field(default_factory=library_catalogue)
-    threshold: float = DEFAULT_THRESHOLD
-    degraded: bool = False  # the provider failed at least once this run
-    _catalogue_vectors: list[list[float]] | None = None
+    degraded: bool = False  # a call failed at least once this run
 
     def __post_init__(self) -> None:
         self.specs = [s for s in self.specs if not s.uses_criterion_description]
 
-    def _vectors(self) -> list[list[float]] | None:
-        """Embed the catalogue once. It cannot change within a run."""
-        if self._catalogue_vectors is None:
-            self._catalogue_vectors = self.embedder.embed(
-                [spec.match_text for spec in self.specs]
-            )
-        return self._catalogue_vectors
+    def match(self, criterion: Criterion, behaviour: Behaviour | None = None) -> str:
+        return self.match_many([(criterion, behaviour)])[criterion.id]
 
-    def match(self, criterion: Criterion) -> str:
-        """The FQN that will judge this criterion.
+    def match_many(
+        self, pairs: Iterable[tuple[Criterion, Behaviour | None]]
+    ) -> dict[str, str]:
+        """The FQN for each Criterion ID, from one model call.
 
-        Never raises. A criterion bound to the generated judge is a working criterion, and an
-        interview that stops because an embedding endpoint is down is not something the user
-        can act on.
+        Never raises. A Criterion with the criterion judge is a working Criterion, and an
+        Interview that stops because the model call failed is not something the user can act on.
         """
-        if not self.specs:
-            return CRITERION_JUDGE_FQN
+        pairs = list(pairs)
+        judged = {criterion.id: CRITERION_JUDGE_FQN for criterion, _ in pairs}
+        # A grader with no Measure is not in the prompt, so it cannot be offered.
+        offered = {
+            spec.fqn
+            for spec in self.specs
+            if spec.taxonomy is not None and spec.taxonomy.measure is not None
+        }
+        if not pairs or not offered:
+            return judged
+        prompt = prompts.match_graders(
+            self.specs,
+            json.dumps(
+                [
+                    _criterion_payload(criterion, behaviour)
+                    for criterion, behaviour in pairs
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
         try:
-            vectors = self._vectors()
-            if not vectors:
-                return CRITERION_JUDGE_FQN
-            [query] = self.embedder.embed([str(criterion.description)])
+            choices = self.selector.select_graders(prompt, offered, set(judged))
         except Exception:
+            # The user sees only a short warning, so the cause goes to the log.
+            logger.warning("grader_matching_failed", exc_info=True)
             self.degraded = True
-            return CRITERION_JUDGE_FQN
-
-        scored = [
-            (cosine(query, vector), spec)
-            for vector, spec in zip(vectors, self.specs, strict=False)
-        ]
-        if not scored:
-            return CRITERION_JUDGE_FQN
-
-        score, best = max(scored, key=lambda pair: pair[0])
-        return best.fqn if score >= self.threshold else CRITERION_JUDGE_FQN
+            return judged
+        for choice in choices.choices:
+            if choice.criterion_id in judged and choice.grader in offered:
+                judged[choice.criterion_id] = choice.grader
+        return judged
 
 
-def match_specification(specification: Specification, matcher: EmbeddingMatcher) -> int:
-    """Resolve every criterion that needs it. Returns how many were matched.
+def match_specification(specification: Specification, matcher: GraderMatcher) -> int:
+    """Match every Criterion without a grader in one call. Returns how many were matched.
 
-    Preserve existing mappings and parameters. Dormant Criteria also need a Grader
-    because they remain in the shared document.
+    Existing graders and settings stay. Dormant Criteria also need a grader, because they stay
+    in the shared document.
     """
-    matched = 0
-    for behaviour in specification.behaviours():
-        for criterion in behaviour.criteria:
-            if criterion.grader_fqn:
-                continue
-            criterion.grader_fqn = matcher.match(criterion)
-            criterion.grader_args = default_grader_args(criterion)
-            matched += 1
-    return matched
+    pairs = [
+        (criterion, behaviour)
+        for behaviour in specification.behaviours()
+        for criterion in behaviour.criteria
+        if not criterion.grader_fqn
+    ]
+    if not pairs:
+        return 0
+    fqns = matcher.match_many(pairs)
+    for criterion, _ in pairs:
+        criterion.grader_fqn = fqns[criterion.id]
+        criterion.grader_args = default_grader_args(criterion)
+    return len(pairs)
 
 
-def rematch(criterion: Criterion, matcher: EmbeddingMatcher) -> str:
-    """Re-resolve after the criterion's text changed.
+def rematch(criterion: Criterion, matcher: GraderMatcher) -> str:
+    """Match one Criterion again after its text changed.
 
-    Silent, and it takes nothing from the user: the matcher chose the previous value, so
-    re-choosing overwrites only its own work. This stops being true the day a grader picker
-    exists — a user-chosen grader would be destroyed here without a word.
+    The settings stay when the grader does not change. A new grader gets its default settings.
     """
     previous = criterion.grader_fqn
     criterion.grader_fqn = matcher.match(criterion)

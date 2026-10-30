@@ -1,8 +1,7 @@
-// Model settings in the browser: the banner for roles that are not configured, and the run
+// Model settings in the browser: the start check for the interview role, and the run
 // settings step after the last review. The browser never sees a key or a URL. `GET /models`
 // returns names and status only, and the run settings step writes model names only.
 
-import { Info } from "lucide-react";
 import type {
   InterviewState,
   ModelRole,
@@ -13,8 +12,8 @@ import { Button, Mono, Panel } from "./ui";
 
 export const MODEL_GUIDE = "docs/guide/models.md";
 
-// The roles whose model a Specification records. Interview and embeddings stay in the
-// environment, so the run settings step does not show them.
+// The roles whose model a Specification records. The interview role stays in the
+// environment, so the run settings step does not show it.
 export type RunModelRole = Extract<
   ModelRole,
   "user_agent" | "runner_agent" | "judge"
@@ -105,7 +104,7 @@ export function stateForDownload(
 }
 
 // Whether the Interview can start. Only the interview role is required. The run roles are needed
-// only for `metis engine run`, and embeddings are optional.
+// only for `metis engine run`.
 export function interviewReady(statuses: readonly ModelStatus[]): boolean {
   return !statuses.some(
     (status) => status.role === "interview" && !status.configured,
@@ -114,34 +113,6 @@ export function interviewReady(statuses: readonly ModelStatus[]): boolean {
 
 // The text on the greyed-out start control while the interview role has no key.
 export const START_BLOCKED = "Configure API keys to start interview";
-
-// A banner above the page when the embeddings role has no key. The Interview still runs, but the
-// Wizard cannot match Criteria to library graders. A missing interview key is not a banner: the
-// start control turns grey and says what to do.
-export function ModelBanner({
-  statuses,
-}: {
-  statuses: readonly ModelStatus[];
-}) {
-  const embeddings = statuses.some(
-    (status) => status.role === "embeddings" && !status.configured,
-  );
-  if (!embeddings) return null;
-  return (
-    <div
-      role="status"
-      className="flex items-center gap-3 border-b border-border bg-muted px-6 py-2 text-sm"
-    >
-      <Info
-        size={16}
-        strokeWidth={1.75}
-        aria-hidden
-        className="shrink-0 text-muted-foreground"
-      />
-      <p>Set up embedding models to select optimal graders.</p>
-    </div>
-  );
-}
 
 // The run settings step: one model name for each role that the run calls. It comes after the
 // last review and before the download. It is controlled, so the caller keeps the draft, saves it

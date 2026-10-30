@@ -95,6 +95,12 @@ def read_specification(path: Path) -> Specification:
     )
 
 
+def cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return dot / norm if norm else 0.0
+
+
 def text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -272,8 +278,6 @@ class CachedSimilarity:
             raise ValueError("Specifications must use the same embedding dimensions.")
 
     def matrix(self, left: list[str], right: list[str]) -> list[list[float]]:
-        from metis.wizard.application.matching import cosine
-
         return [
             [
                 max(

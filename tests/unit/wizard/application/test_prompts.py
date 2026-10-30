@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 import yaml
 
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderTaxonomy,
+    GraderType,
+    JudgmentForm,
+    Measure,
+    ReferenceType,
+    Scope,
+)
 from metis.wizard.application import prompts
 from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import (
@@ -17,9 +27,13 @@ from metis.wizard.contracts import (
     Specification,
     Target,
 )
+from metis.wizard.contracts.grader_spec import GraderSpec
 from metis.wizard.contracts.interview_state import InterviewMessage, Perspective
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import desk_handover, research_assistant
+
+# `matching` exports the `library_catalogue` function under the module's own name.
+catalogue_module = import_module("metis.wizard.application.matching.library_catalogue")
 
 PERSPECTIVES = Path("packages/wizard/src/metis/wizard/application/perspectives")
 
@@ -105,6 +119,10 @@ def _blank_scenarios(document: dict[str, Any]) -> None:
     document["model_calls"]["scenarios"] = "  "
 
 
+def _remove_match_graders(document: dict[str, Any]) -> None:
+    del document["match_graders"]
+
+
 def _invalid_template(document: dict[str, Any]) -> None:
     document["model_calls"]["criteria"] = "bad $"
 
@@ -119,6 +137,7 @@ def _unsupported_placeholder(document: dict[str, Any]) -> None:
         (_set_system_to_list, "system"),
         (_remove_criteria, "model_calls.criteria"),
         (_blank_scenarios, "model_calls.scenarios"),
+        (_remove_match_graders, "match_graders"),
         (_invalid_template, "model_calls.criteria"),
         (_unsupported_placeholder, "model_calls.criteria"),
     ],
@@ -380,3 +399,110 @@ def test_model_calls_receive_their_required_context(
 def test_unspecified_capability_context_is_available_to_all_calls() -> None:
     prompt = prompts.clarify(research_assistant(), [])
     assert "unspecified" in _xml_content(prompt.system, "capability_evidence").lower()
+
+
+# --- the grader library, by disclosure level -------------------------------
+
+
+def _test_grader(measure: Measure) -> GraderSpec:
+    return GraderSpec(
+        fqn=f"tests.graders.{measure.value.upper()}_SENTINEL_GRADER",
+        name=f"{measure.value} sentinel name",
+        description=f"{measure.value} SENTINEL SUMMARY",
+        taxonomy=GraderTaxonomy(
+            measure=measure,
+            scopes=(Scope.SESSION,),
+            grader_types=(GraderType.LLM,),
+            reference_types=(ReferenceType.RUBRIC_BASED,),
+            judgment_forms=(JudgmentForm.BINARY,),
+            aggregations=(Aggregation.NONE_SINGLE_SCORE,),
+        ),
+    )
+
+
+@pytest.fixture
+def test_graders(monkeypatch: pytest.MonkeyPatch) -> list[GraderSpec]:
+    specs = [_test_grader(Measure.ERROR_RECOVERY), _test_grader(Measure.TOKEN_USAGE)]
+    monkeypatch.setattr(catalogue_module, "library_catalogue", lambda: specs)
+    return specs
+
+
+def test_each_level_shows_only_its_detail(test_graders: list[GraderSpec]) -> None:
+    overview, measures, graders = (
+        catalogue_module.display_library_catalogue(level)
+        for level in (
+            prompts.CatalogueDisclosure.OVERVIEW,
+            prompts.CatalogueDisclosure.MEASURES,
+            prompts.CatalogueDisclosure.GRADERS,
+        )
+    )
+    measure_names = [
+        measure.value.replace("_", " ").capitalize() for measure in Measure
+    ]
+
+    for spec in test_graders:
+        assert spec.name not in overview + measures
+        assert spec.description not in overview + measures
+        assert f"- {spec.name} [{spec.fqn}]: {spec.description}" in graders
+    assert not any(name in overview + graders for name in measure_names)
+    assert all(name in measures for name in measure_names)
+
+
+def test_the_grouping_keeps_measures_without_a_grader_and_leaves_out_the_judge() -> (
+    None
+):
+    judge = _test_grader(Measure.ERROR_RECOVERY).model_copy(
+        update={"taxonomy": None, "fqn": "tests.graders.Judge"}
+    )
+    recovery = _test_grader(Measure.ERROR_RECOVERY)
+
+    dimensions = catalogue_module.group_by_taxonomy([judge, recovery])
+
+    entries = {
+        entry.measure: entry.graders
+        for dimension in dimensions
+        for entry in dimension.measures
+    }
+    assert set(entries) == set(Measure)
+    assert entries[Measure.ERROR_RECOVERY] == (recovery,)
+    assert all(
+        not graders for m, graders in entries.items() if m is not Measure.ERROR_RECOVERY
+    )
+
+
+@pytest.mark.parametrize(
+    ("call", "level"),
+    [
+        ("clarify", prompts.CatalogueDisclosure.MEASURES),
+        ("behaviours", prompts.CatalogueDisclosure.MEASURES),
+        ("criteria", prompts.CatalogueDisclosure.GRADERS),
+        ("personas", prompts.CatalogueDisclosure.OVERVIEW),
+        ("scenarios", prompts.CatalogueDisclosure.OVERVIEW),
+        ("test_cases", prompts.CatalogueDisclosure.OVERVIEW),
+        ("chat:clarify", prompts.CatalogueDisclosure.MEASURES),
+        ("chat:behaviours", prompts.CatalogueDisclosure.MEASURES),
+        ("chat:criteria", prompts.CatalogueDisclosure.GRADERS),
+        ("chat:scenarios", prompts.CatalogueDisclosure.GRADERS),
+    ],
+)
+def test_each_model_call_receives_the_library_at_its_level(
+    test_graders: list[GraderSpec], call: str, level: prompts.CatalogueDisclosure
+) -> None:
+    specification = desk_handover()
+    context = interview_context()
+    if call.startswith("chat:"):
+        prompt = prompts.chat(
+            specification, call.removeprefix("chat:"), "text", None, context=context
+        )
+    elif call in {"clarify", "behaviours"}:
+        prompt = getattr(prompts, call)(specification, [], context=context)
+    else:
+        prompt = getattr(prompts, call)(specification, context=context)
+
+    assert _xml_content(prompt.system, "grader_library").strip() == (
+        catalogue_module.display_library_catalogue(level)
+    )
+
+
+def test_every_model_call_chooses_a_disclosure_level() -> None:
+    assert set(prompts.DISCLOSURE) == set(get_args(prompts.ModelCall))

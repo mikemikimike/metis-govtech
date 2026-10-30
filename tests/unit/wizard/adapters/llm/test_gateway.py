@@ -19,13 +19,13 @@ from metis.wizard.adapters.llm.gateway import (
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
     InterviewerOutputError,
-    InterviewerUnavailable,
 )
 from metis.wizard.contracts import (
     ClarifyResult,
     Specification,
     Target,
 )
+from metis.wizard.contracts.output import GraderChoice, GraderChoices
 from tests.fixtures.wizard.context import interview_context
 
 
@@ -76,9 +76,6 @@ _ROLE_VARS = (
     "INTERVIEW_API_KEY",
     "INTERVIEW_BASE_URL",
     "INTERVIEW_MODEL",
-    "EMBEDDING_API_KEY",
-    "EMBEDDING_BASE_URL",
-    "EMBEDDING_MODEL",
 )
 
 
@@ -117,37 +114,8 @@ def test_credentials_are_checked_before_any_call(
         GatewayInterviewer()
 
 
-def test_embeddings_are_optional_and_use_the_embedding_model(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Embeddings only match graders. Without a key, embed fails and the matcher falls back."""
-    monkeypatch.delenv("OPENAI_API_KEY")
-    monkeypatch.setenv("INTERVIEW_API_KEY", "key")
-    check_credentials()
-    with pytest.raises(InterviewerUnavailable):
-        GatewayInterviewer().embed(["a criterion"])
-
-    monkeypatch.setenv("OPENAI_API_KEY", "key")
-    monkeypatch.setenv("EMBEDDING_MODEL", "custom-embedding")
-    sent: dict[str, object] = {}
-
-    class Embeddings:
-        def create(self, **kwargs):
-            sent.update(kwargs)
-            return type(
-                "Response", (), {"data": [type("Item", (), {"embedding": [1.0]})()]}
-            )()
-
-    client = type("Client", (), {"embeddings": Embeddings()})()
-    gateway = GatewayInterviewer(_client=client)
-
-    assert gateway.embed(["text"]) == [[1.0]]
-    assert sent["model"] == "custom-embedding"
-    assert sent["input"] == ["text"]
-
-
-def test_each_role_uses_its_own_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("EMBEDDING_BASE_URL", "https://embeddings.example")
+def test_the_interview_role_builds_one_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INTERVIEW_BASE_URL", "https://interview.example")
     built: list[dict[str, object]] = []
 
     import langfuse.openai
@@ -160,7 +128,25 @@ def test_each_role_uses_its_own_gateway(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     assert gateway.model == "gpt-6-luna"
-    assert [b["base_url"] for b in built] == [None, "https://embeddings.example"]
+    assert [b["base_url"] for b in built] == [None]
+
+
+def test_a_grader_choice_outside_the_offer_is_retried_with_the_error() -> None:
+    bad = GraderChoices(
+        choices=[GraderChoice(criterion_id="AC-1-1", grader="not.Offered")]
+    ).model_dump_json()
+    good = GraderChoices(
+        choices=[GraderChoice(criterion_id="AC-1-1", grader="tests.Offered")]
+    ).model_dump_json()
+    model, completions = interviewer([bad, good])
+
+    result = model.select_graders(
+        simple_prompt("match_graders"), {"tests.Offered"}, {"AC-1-1"}
+    )
+
+    assert result.choices[0].grader == "tests.Offered"
+    assert len(completions.calls) == 2
+    assert "not.Offered" in completions.calls[1]["messages"][3]["content"]
 
 
 def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:

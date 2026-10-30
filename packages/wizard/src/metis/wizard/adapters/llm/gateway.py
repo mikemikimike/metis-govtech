@@ -1,13 +1,12 @@
 """The real interviewer, over the LLM gateway.
 
-The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url`. The interview
-and the embeddings are two model roles (`metis.core.model_settings`). Each has its own model,
-key and URL, and both fall back to the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL`. When the
-two roles share one gateway, one client serves both, which is why the matcher is not a second
-integration.
+The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url`. The interview role
+(`metis.core.model_settings`) has its own model, key and URL, and falls back to the shared
+`OPENAI_API_KEY` and `OPENAI_BASE_URL`. Grader matching is one more structured call on the same
+client.
 
 The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI client.
-Importing it patches the client so every chat and embedding call is recorded as a generation —
+Importing it patches the client so every chat call is recorded as a generation —
 input, raw reply, model, token usage and latency — with no tracing code on the call path.
 `_ask` opens one observation, so a call's three attempts nest under one trace named by the
 Interview step. A caller that has an Interview ID can use it to group traces; the stateless
@@ -63,6 +62,7 @@ from metis.wizard.application.readiness import missing_criteria_paths
 from metis.wizard.contracts.output import (
     ClarifyResult,
     CriterionConfiguration,
+    GraderChoices,
     StepResult,
 )
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
@@ -158,7 +158,7 @@ def check_credentials(
     """Fail before any model call when the interview role has no API key.
 
     ``interview`` is the resolved interview role; without it, the role resolves from ``env``.
-    Embeddings are optional, so only the interview role can stop the start. The message names
+    The message names
     the variables, the `.env` file that was read, and the model guide. The base URL is optional,
     as in the engine.
     """
@@ -209,9 +209,6 @@ class GatewayInterviewer:
     interview: RoleSettings = field(
         default_factory=lambda: resolve_role(ModelRole.INTERVIEW, os.environ)
     )
-    embeddings: RoleSettings = field(
-        default_factory=lambda: resolve_role(ModelRole.EMBEDDINGS, os.environ)
-    )
     context_tokens: int = field(
         default_factory=lambda: int(
             os.environ.get("INTERVIEW_CONTEXT_TOKENS", "128000")
@@ -221,7 +218,6 @@ class GatewayInterviewer:
         default_factory=lambda: int(os.environ.get("INTERVIEW_OUTPUT_TOKENS", "16384"))
     )
     _client: Any = None
-    _embedding_client: Any = None
     interview_id: str | None = None
     _tracing_key: str = field(default_factory=tracing_key)
 
@@ -235,14 +231,6 @@ class GatewayInterviewer:
             )
         if self._client is None:
             self._client = _client(self.interview)
-        if self._embedding_client is None and self.embeddings.configured:
-            same_gateway = (self.embeddings.api_key, self.embeddings.base_url) == (
-                self.interview.api_key,
-                self.interview.base_url,
-            )
-            self._embedding_client = (
-                self._client if same_gateway else _client(self.embeddings)
-            )
 
     @property
     def model(self) -> str:
@@ -588,16 +576,21 @@ class GatewayInterviewer:
             context,
         )
 
-    # ── embeddings, for the matcher ────────────────────────────────────────
+    # ── grader matching ────────────────────────────────────────────────────
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        # With no embeddings key there is no client. The matcher catches this error and uses
-        # the criterion judge.
-        if self._embedding_client is None:
-            raise InterviewerUnavailable("The embeddings role has no API key.")
-        response = self._embedding_client.embeddings.create(
-            model=self.embeddings.model,
-            input=texts,
-            langfuse_public_key=self._tracing_key,
-        )
-        return [item.embedding for item in response.data]
+    def select_graders(
+        self,
+        prompt: prompts.ModelPrompt,
+        offered: set[str],
+        criterion_ids: set[str],
+    ) -> GraderChoices:
+        from metis.wizard.application.matching.matcher import check_grader_choices
+
+        def validate(choices: GraderChoices) -> None:
+            try:
+                check_grader_choices(choices, offered, criterion_ids)
+            except ValueError as exc:
+                raise PatchValueError(str(exc)) from exc
+
+        result, _ = self._ask(prompt, GraderChoices, validate=validate)
+        return result

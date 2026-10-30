@@ -1,8 +1,8 @@
 # Edit the criterion fallback judge
 
 The guided Interview selects `metis.library.graders.CriterionJudgeGrader` for a criterion when
-no specific grader matches it. The Interview also selects this judge when the embedding provider
-fails. The judge uses the criterion description as its instructions. The manual form does not
+no library grader matches it. The Interview also selects this judge when the grader-matching
+model call fails. The judge uses the criterion description as its instructions. The manual form does not
 offer this judge, because the form has no criterion description field.
 
 ## Taxonomy declaration

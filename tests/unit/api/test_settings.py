@@ -46,7 +46,7 @@ def test_the_app_starts_without_keys_and_the_interview_needs_only_its_own_key(
     assert "INTERVIEW_API_KEY or OPENAI_API_KEY" in body["message"]
     assert Settings(env={"INTERVIEW_API_KEY": "k"}).missing_message() is None
     with pytest.raises(SettingsError, match="INTERVIEW_API_KEY or OPENAI_API_KEY"):
-        build_dependencies(Settings(env={"EMBEDDING_API_KEY": "k"}))
+        build_dependencies(Settings(env={"JUDGE_API_KEY": "k"}))
 
 
 def test_the_connection_check_works_without_model_keys(no_keys: None) -> None:

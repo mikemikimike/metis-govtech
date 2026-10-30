@@ -1203,15 +1203,18 @@ class RewordingInterviewer(ScriptedInterviewer):
 
 class RecordingMatcher:
     """Records which criteria it was asked to (re)match, and stamps a marker so the effect
-    is observable. Stands in for the embedding matcher, whose internals are tested elsewhere."""
+    is observable. Stands in for the grader matcher, whose internals are tested elsewhere."""
 
     def __init__(self) -> None:
         self.matched: list[str] = []
         self.degraded = False
 
-    def match(self, criterion) -> str:
+    def match(self, criterion, _behaviour=None) -> str:
         self.matched.append(criterion.id)
         return "metis.library.graders.demo.DemoTraceBudgetGrader"
+
+    def match_many(self, pairs) -> dict[str, str]:
+        return {criterion.id: self.match(criterion) for criterion, _ in pairs}
 
 
 def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:

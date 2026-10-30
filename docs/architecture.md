@@ -211,7 +211,7 @@ compile from the same final state saved as `inputs/interview_state.json`. Manual
 include an empty `inputs/` folder. The Specification and fixtures belong under `outputs/`;
 the existing CLI review belongs at `outputs/review.md`. Engine reads the `outputs/` folder.
 The CLI publishes `outputs/specification.yaml` last as its completion marker and retains
-recovery state until export succeeds. Wizard MUST NOT create Testbed embedding caches or scores.
+recovery state until export succeeds. Wizard MUST NOT create Testbed caches or scores.
 
 Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It copies
 `--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,

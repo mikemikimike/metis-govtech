@@ -51,10 +51,19 @@ exits with status `1` if any case fails or remains incomplete.
 
 ### Metrics
 
-The scorer uses the vectors of the embeddings role (`EMBEDDING_MODEL`, see
-[the model guide](../../../docs/guide/models.md)) to measure text similarity and match
-generated items to reference items. A cache made with a different model is embedded again. Matching is one-to-one and does not depend on
-item IDs or order.
+The scorer uses an embedding model to measure text similarity and match generated
+items to reference items. A cache made with a different model is embedded again.
+Matching is one-to-one and does not depend on item IDs or order.
+
+Only the testbed uses an embedding model. Set these variables in `.env` to change it:
+
+| Setting | Variable | When not set |
+|---|---|---|
+| Model | `EMBEDDING_MODEL` | `text-embedding-3-large` |
+| API key | `EMBEDDING_API_KEY` | `OPENAI_API_KEY` |
+| Base URL | `EMBEDDING_BASE_URL` | `OPENAI_BASE_URL` |
+
+Each metric compares this information:
 
 | Metric | Compared information |
 |---|---|

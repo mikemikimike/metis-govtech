@@ -26,7 +26,10 @@ from metis.wizard.contracts import (
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from metis.wizard.contracts import AnyRequest, InterviewContext, InterviewState
+    from metis.wizard.domain.specification import Criterion
 
 
 @dataclass
@@ -283,8 +286,11 @@ class ScriptedMatcher:
 
     degraded: bool = False
 
-    def match(self, _criterion: object) -> str:
+    def match(self, _criterion: object, _behaviour: object = None) -> str:
         return TRACE_BUDGET
+
+    def match_many(self, pairs: Iterable[tuple[Criterion, object]]) -> dict[str, str]:
+        return {criterion.id: TRACE_BUDGET for criterion, _ in pairs}
 
 
 @dataclass

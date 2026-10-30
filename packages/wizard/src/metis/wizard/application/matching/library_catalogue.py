@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import inspect
 import re
+from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from importlib import import_module
@@ -35,6 +36,7 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
 from metis.library.grader import CriterionJudgeArgs, Grader, GraderArgs, JudgeArgs
+from metis.library.taxonomy import MEASURE_DIMENSIONS, Dimension, Measure
 from metis.wizard.contracts.grader_spec import (
     GraderParam,
     GraderSetting,
@@ -43,6 +45,8 @@ from metis.wizard.contracts.grader_spec import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pydantic.fields import FieldInfo
 
 # The one string that says where the graders live.
@@ -236,3 +240,111 @@ def library_catalogue() -> list[GraderSpec]:
         )
 
     return sorted(specs, key=lambda s: s.fqn)
+
+
+# ── the catalogue as model context ─────────────────────────────────────────
+
+
+class CatalogueDisclosure(Enum):
+    """How much of the catalogue one model call sees."""
+
+    OVERVIEW = "overview"  # each Dimension, with its grader count
+    MEASURES = (
+        "measures"  # each Dimension and its Measures, marked when a grader exists
+    )
+    GRADERS = "graders"  # each Dimension and its library graders
+
+
+@dataclass(frozen=True)
+class CatalogueMeasure:
+    measure: Measure
+    # Empty when the library has no grader for this Measure yet.
+    graders: tuple[GraderSpec, ...]
+
+
+@dataclass(frozen=True)
+class CatalogueDimension:
+    dimension: Dimension
+    measures: tuple[CatalogueMeasure, ...]
+
+    @property
+    def grader_count(self) -> int:
+        return sum(len(measure.graders) for measure in self.measures)
+
+
+def group_by_taxonomy(
+    specs: Iterable[GraderSpec] | None = None,
+) -> tuple[CatalogueDimension, ...]:
+    """The catalogue under each Measure and Dimension, in the taxonomy order.
+
+    A Measure with no library grader stays, because the model can still write a Criterion for
+    it. That Criterion gets the criterion judge. The criterion judge has no Measure, so it is
+    left out.
+    """
+    by_measure: dict[Measure, list[GraderSpec]] = {}
+    for spec in library_catalogue() if specs is None else specs:
+        if spec.taxonomy is not None and spec.taxonomy.measure is not None:
+            by_measure.setdefault(spec.taxonomy.measure, []).append(spec)
+    return tuple(
+        CatalogueDimension(
+            dimension=dimension,
+            measures=tuple(
+                CatalogueMeasure(
+                    measure=measure, graders=tuple(by_measure.get(measure, ()))
+                )
+                for measure in Measure
+                if MEASURE_DIMENSIONS[measure] is dimension
+            ),
+        )
+        for dimension in Dimension
+    )
+
+
+def _label(value: str) -> str:
+    """`task_and_output_quality` → `Task and output quality`."""
+    return value.replace("_", " ").capitalize()
+
+
+def _grader_count(count: int) -> str:
+    return f"{count} library grader{'' if count == 1 else 's'}"
+
+
+def display_library_catalogue(
+    detail: CatalogueDisclosure, specs: Iterable[GraderSpec] | None = None
+) -> str:
+    """The catalogue as prompt text, at one level of detail."""
+    dimensions = group_by_taxonomy(specs)
+    if detail is CatalogueDisclosure.OVERVIEW:
+        lines = [
+            "The Dimensions of the grader taxonomy, with the library graders in each:"
+        ]
+        lines += [
+            f"- {_label(item.dimension)}: {_grader_count(item.grader_count)}"
+            for item in dimensions
+        ]
+        return "\n".join(lines)
+    if detail is CatalogueDisclosure.MEASURES:
+        lines = [
+            "The Dimensions and Measures of the grader taxonomy. "
+            "[grader] marks a Measure that has a library grader."
+        ]
+        for item in dimensions:
+            lines.append(f"{_label(item.dimension)}:")
+            lines += [
+                f"- {_label(entry.measure)}{' [grader]' if entry.graders else ''}"
+                for entry in item.measures
+            ]
+        return "\n".join(lines)
+    # A grader's name and summary already state its Measure, so the Measures are left out.
+    lines = ["The Dimensions of the grader taxonomy, with the library graders in each:"]
+    for item in dimensions:
+        if not item.grader_count:
+            lines.append(f"{_label(item.dimension)}: no library graders yet")
+            continue
+        lines.append(f"{_label(item.dimension)}:")
+        lines += [
+            f"- {spec.name} [{spec.fqn}]: {spec.description}"
+            for entry in item.measures
+            for spec in entry.graders
+        ]
+    return "\n".join(lines)

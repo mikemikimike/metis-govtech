@@ -69,7 +69,7 @@ through the engine gate. Do not repeat every driver example.
 
 - The client implementation guide is `docs/guide/wizard/api.md`. Keep its state loop and examples
   aligned with the OpenAPI document when the HTTP contract changes.
-- The API resolves the interview and embeddings roles through `metis.core.model_settings`, with the
+- The API resolves the interview role through `metis.core.model_settings`, with the
   same variable names as the wizard and the engine. `cli.py` reads the one `.env` that core finds.
   For monorepo development, keep one active `.env` at the repository root. Copy it from the
   root `.env.example`. See
