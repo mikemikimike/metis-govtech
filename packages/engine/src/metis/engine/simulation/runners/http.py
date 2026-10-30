@@ -256,6 +256,9 @@ class HttpRunner(Runner):
         method = method.upper()
         check_call(method, path, self._binding.binding.forbidden_calls)
         extra = check_headers(headers)
+        for part, value in (multipart or {}).items():
+            if not isinstance(value, str):
+                raise ToolRefused(f"multipart part {part!r} must be text or @filename")
         uploads = [v[1:] for v in (multipart or {}).values() if v.startswith("@")]
         if file_id_from is not None and len(uploads) != 1:
             raise ToolRefused(

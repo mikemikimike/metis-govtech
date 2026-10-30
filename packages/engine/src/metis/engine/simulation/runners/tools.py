@@ -115,6 +115,7 @@ TOOLS: list[Any] = [
             "json": {"description": "the JSON body"},
             "multipart": {
                 "type": "object",
+                "additionalProperties": {"type": "string"},
                 "description": "part name to text, or @filename for a file you hold",
             },
             "headers": {"type": "object"},
