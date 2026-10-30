@@ -425,6 +425,28 @@ def test_the_session_shows_every_recorded_event_in_time_order() -> None:
     )
 
 
+def test_a_structured_model_output_is_shown_as_recorded() -> None:
+    action = '{"kind": "answer", "markdown": "Revenue rose.", "references": [{"section": "Overview"}]}'
+    rows = (
+        {"id": "root", "traceId": "t1", "input": "q", "output": "Revenue rose."},
+        {
+            "id": "llm",
+            "traceId": "t1",
+            "type": "GENERATION",
+            "parentObservationId": "root",
+            "output": action,
+        },
+    )
+    trace = Trace(
+        id="t1",
+        session_id="s",
+        observations=tuple(Observation.model_validate(row) for row in rows),
+    )
+    assert render_session(turns((trace,))) == (
+        f"## Turn 1\nUser: q\nModel: {action}\nAssistant: Revenue rose."
+    )
+
+
 def test_a_system_prompt_is_shown_once_per_session() -> None:
     gi = _agent_session()
     two = GradingInput(traces=gi.traces * 2)

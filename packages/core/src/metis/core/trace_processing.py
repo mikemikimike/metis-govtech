@@ -427,7 +427,9 @@ def render_session(
       appears, so a long prompt is not repeated in every turn.
     - ``Model (agent):`` for what a model call wrote, such as reasoning or a message between
       tool calls. Only a call's output is shown, never its input, which repeats the history.
-      Output that repeats the reply or a sub-agent's answer is left out.
+      A structured output that is not chat messages, such as a JSON action, is shown as the
+      application recorded it. Output that repeats the reply or a sub-agent's answer is left
+      out.
     - ``Handoff to agent (from caller):`` and ``agent returned (to caller):`` for a sub-agent.
     - ``[error on TYPE name (agent): message]`` or ``[warning on …]`` for an error Langfuse
       recorded on an observation that is not a tool call.
@@ -837,8 +839,8 @@ def _events(
         if observation.type == "GENERATION":
             for prompt in _system_prompts(observation.input):
                 timed.append((start, SystemPrompt(agent=agent, text=prompt)))
-            for text in _model_texts(observation.output):
-                if isinstance(text, Problem) or _plain(text) not in repeated:
+            for text in _model_texts(observation):
+                if _plain(text) not in repeated:
                     timed.append((start, ModelOutput(agent=agent, text=text)))
         elif observation.type == "AGENT" and agent is not None:
             name = observation.name or "agent"
@@ -903,14 +905,17 @@ def _system_prompts(value: object) -> list[str]:
     return [m.text for m in messages if m.role == "system" and m.text.strip()]
 
 
-def _model_texts(value: object) -> list[str | Problem]:
+def _model_texts(observation: Observation) -> list[str]:
+    """What a model call wrote: its assistant messages, or a structured output that is not
+    chat messages (such as a JSON action) as the application recorded it."""
+    value = observation.output
     if value is None:
         return []
     if isinstance(value, str):
         return [value] if value.strip() else []
     messages = messages_of(value)
     if isinstance(messages, Problem):
-        return [messages]
+        return [_shown_payload(_recorded_text(observation, "output") or value, None)]
     return [m.text for m in messages if m.role == "assistant" and m.text.strip()]
 
 
