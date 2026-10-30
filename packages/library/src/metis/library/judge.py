@@ -51,7 +51,8 @@ class TaskArgs(BaseModel):
 
     task_description: NonEmptyText | None = None
     """What the agent was asked to do. When unset, the judge infers the goal from the user's
-    messages. A criterion runs on every scenario, so this text applies to all of them."""
+    messages. A criterion runs in every task that selects its behaviour, so this text applies
+    to the scenarios of all those tasks."""
 
     def task_block(self) -> str:
         """The ``<task_description>`` block, or a note that the judge infers the goal."""

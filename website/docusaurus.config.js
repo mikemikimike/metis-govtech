@@ -1,4 +1,4 @@
-import {themes} from 'prism-react-renderer';
+import {jettwaveTealDark, jettwaveTealLight} from './src/codeThemes.js';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -17,7 +17,6 @@ const config = {
       'classic',
       {
         docs: {
-          path: '../docs/tutorial',
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
         },
@@ -29,8 +28,8 @@ const config = {
   themeConfig: {
     colorMode: {defaultMode: 'light', respectPrefersColorScheme: false},
     prism: {
-      theme: themes.github,
-      darkTheme: themes.oneDark,
+      theme: jettwaveTealLight,
+      darkTheme: jettwaveTealDark,
       additionalLanguages: ['bash', 'yaml'],
     },
     navbar: {

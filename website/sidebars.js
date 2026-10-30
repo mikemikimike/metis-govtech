@@ -1,3 +1,5 @@
+import graderData from './src/data/graders.json';
+
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
   tutorial: [
@@ -8,17 +10,21 @@ const sidebars = {
     {
       type: 'category',
       label: 'Build your specification',
-      link: {type: 'doc', id: 'wizard'},
       collapsed: false,
       items: [
+        {type: 'doc', id: 'wizard', label: 'Specification wizard'},
         {
           type: 'category',
           label: 'Guided interview',
-          link: {type: 'doc', id: 'wizard-interview'},
           collapsed: false,
-          items: ['product-requirements', 'test-scenarios'],
+          items: [
+            {type: 'doc', id: 'wizard-interview', label: 'Start the interview'},
+            'product-requirements',
+            'test-scenarios',
+          ],
         },
-        {type: 'doc', id: 'manual-specification', label: 'Configure manually'},
+        {type: 'doc', id: 'specification-file', label: 'Write your own specification'},
+        {type: 'doc', id: 'target-connection', label: 'Target connection'},
       ],
     },
     {
@@ -28,8 +34,26 @@ const sidebars = {
       collapsed: false,
       items: ['run-test-suite', 'run-graders'],
     },
-    {type: 'doc', id: 'report', label: 'Analyse your results'},
-    {type: 'doc', id: 'library', label: 'View our graders'},
+    {
+      type: 'category',
+      label: 'Analyse your results',
+      collapsed: false,
+      items: ['report'],
+    },
+    {
+      type: 'category',
+      label: 'Choose your graders',
+      collapsed: false,
+      items: [
+        'library/grader-library',
+        'library/how-graders-work',
+        ...graderData.groups.map(({title, graders}) => ({
+          type: 'category',
+          label: title,
+          items: graders.map(({slug}) => `library/${slug}`),
+        })),
+      ],
+    },
     {type: 'html', value: '<hr class="sidebar-divider" aria-hidden="true" />'},
     {type: 'doc', id: 'examples', label: 'Examples'},
   ],

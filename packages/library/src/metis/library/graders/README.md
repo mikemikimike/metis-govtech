@@ -82,3 +82,5 @@ The example graders in `demo/` are not in this catalogue, and the wizard does no
 When you add a grader, add a row to the table for its sub-dimension. When a grader adapts an
 upstream prompt, link the file at the pinned commit. Write the metric name exactly as the
 upstream package writes it, and add the project to `EXTERNAL_SOURCES.md` if it is new there.
+Then run `make generate-grader-docs`. It writes the grader's docs page from its docstring, its
+arguments, its `criteria()` prompt, and the "Adapted from" column of this file.

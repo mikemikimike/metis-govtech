@@ -1,3 +1,0 @@
----
-title: Analyse your results
----

@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
+.PHONY: install-docs run-docs build-docs check-docs generate-grader-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
 
 help:
 	@printf "Available targets:\n"
@@ -37,6 +37,7 @@ help:
 	@printf "  make build-docs        Build the docs site\n"
 	@printf "  make build-landing     Build the landing page\n"
 	@printf "  make build-site        Build the GitHub Pages site into _site/ (landing page + docs)\n"
+	@printf "  make generate-grader-docs  Regenerate the grader data that the docs read\n"
 	@printf "\n"
 	@printf "Other:\n"
 	@printf "  make clean             Remove all generated/cached files\n"
@@ -84,6 +85,9 @@ build-site: build-landing build-docs
 	rm -rf _site
 	cp -R landing-page/dist _site
 	cp -R website/build _site/docs
+
+generate-grader-docs:
+	uv run python packages/library/scripts/generate_grader_docs.py
 
 install-extras: install-extras-playwright
 

@@ -245,8 +245,12 @@ To review an adaptation, compare `criteria()` with the linked upstream file.
    `check_setup()`. The engine reports its errors before the run.
 6. Export the grader from `metis.library.graders`, and add a row to the grader catalogue.
    Put example graders in `metis.library.graders.demo` only.
-7. Add tests in `tests/unit/library/`. Test each declared scope, invalid settings, missing
+7. Run `make generate-grader-docs`. It writes the grader's page in `website/docs/library/` from
+   the class docstring, the taxonomy, the arguments model, `criteria()`, and the grader
+   catalogue. Run it again after any change to those. Do not edit the generated pages.
+8. Add tests in `tests/unit/library/`. Test each declared scope, invalid settings, missing
    evidence, and a judge failure. Mock the model in the tests.
+   `test_grader_docs.py` fails when a generated page or the docs data is stale.
 
 The unit tests show that the grader runs. They do not show that it judges correctly. To
 measure that, compare its results with human labels on representative sessions.
