@@ -1350,6 +1350,21 @@ export interface components {
             diagnostic_message?: string | null;
         };
         /**
+         * InterviewMessage
+         * @description One message of the clarification history, from the user or the interviewer.
+         *
+         *     An Interview turn adds at most one user message and one assistant message.
+         */
+        InterviewMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Text */
+            text: string;
+        };
+        /**
          * InterviewStartRequest
          * @description The first operation, containing all opening evidence.
          */
@@ -1386,7 +1401,7 @@ export interface components {
              */
             confirmed: boolean;
             /** History */
-            history?: components["schemas"]["Turn"][];
+            history?: components["schemas"]["InterviewMessage"][];
             /** Step Messages */
             step_messages?: {
                 [key: string]: string;
@@ -1421,7 +1436,7 @@ export interface components {
              */
             confirmed: boolean;
             /** History */
-            history?: components["schemas"]["Turn"][];
+            history?: components["schemas"]["InterviewMessage"][];
             /** Step Messages */
             step_messages?: {
                 [key: string]: string;
@@ -2030,16 +2045,6 @@ export interface components {
             max_run_retries?: number | null;
             /** User Agent Model */
             user_agent_model?: string | null;
-        };
-        /** Turn */
-        Turn: {
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "user" | "assistant";
-            /** Text */
-            text: string;
         };
         /**
          * Warning

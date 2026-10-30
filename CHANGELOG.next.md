@@ -68,6 +68,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   the licence, and the project status. It also has sections for the project
   status, the maintainers and contact, and security reporting.
 
+- **Defined Interview turn and Interview message in `GLOSSARY.md`.** An Interview turn is one
+  answer in the wizard's Interview and involves no target. It is separate from a simulated turn
+  and a recorded turn. An Interview message is one entry in the clarification history (#623).
+
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
   one grader result grades — the whole session, a trace, or an observation. It belongs
   to a result, not to a grader, and is distinct from the Baseline and Feature-specific
@@ -1214,6 +1218,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   now shows five steps.
 
 #### Breaking
+
+- Rename the wizard `Turn` model to `InterviewMessage`. It is one message of the clarification
+  history, and "turn" is kept for the Interview turn. The JSON shape and the `history` field do not
+  change, so saved Interview state still loads. The OpenAPI schema component and the generated web
+  type are now `InterviewMessage` (#623).
 
 - **Interview tracing uses the METIS-internal Langfuse.** The wizard and the API trace their model
   calls only when `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY` and

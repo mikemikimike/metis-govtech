@@ -5,6 +5,8 @@
 | Profile | The context and requirements for a **target**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
 | Specification | The evaluation document containing a **profile** and the configuration needed to conduct an **experiment**. |
 | Interview | The wizard's guided process that builds a **specification** by asking the user a sequence of questions. |
+| Interview turn | One answer in the **Interview**: the client sends its saved state and the user's answer to the pending question or screen, and receives the new state and the next screen. Starting and ending the Interview are separate operations and are not turns. It involves no **target**. The API route `/api/v1/wizard/interview/turn` performs one Interview turn. An Interview turn is neither a **simulated turn** nor a **recorded turn**. |
+| Interview message | One entry in the Interview's clarification history: a message from the user or from the interviewer (role `assistant`). An **Interview turn** adds at most one user message and one assistant message. The wizard keeps only the most recent messages. |
 | Document | A user-supplied file that can inform **evaluation planning** and may be sent to the **target** as a **fixture** for a **task**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
 | Capability | An ability a **target** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
@@ -18,7 +20,7 @@
 | Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
 | Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **expected behaviours**. Each selected Behaviour supplies all its Criteria. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
 | Trial | One execution of a **test case** against a **target**, producing a **trace** and evaluation outputs. |
-| Simulated turn | One exchange in the simulation loop of a **trial**: the simulated user's message, with any actions such as a file upload, and the **target**'s reply. METIS counts simulated turns as it runs, and `max_turns` limits them. A retried delivery is the same simulated turn, and the closing end-of-chat step is not one. A simulated turn is what METIS did; the matching **recorded turn** is what the target logged. Use "turn" alone in neither. |
+| Simulated turn | One exchange in the simulation loop of a **trial**: the simulated user's message, with any actions such as a file upload, and the **target**'s reply. METIS counts simulated turns as it runs, and `max_turns` limits them. A retried delivery is the same simulated turn, and the closing end-of-chat step is not one. A simulated turn is what METIS did; the matching **recorded turn** is what the target logged. Use "turn" alone for neither, and do not confuse either with an **Interview turn**. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
@@ -62,7 +64,7 @@ They are listed from largest to smallest.
 | Recorded turn | One **trace** read as an exchange: the root observation's input is the user's message and its output is the reply, plus the tool calls and errors inside the trace. Graders see only recorded turns, and a recorded turn's number is its position among the **session**'s traces (`turn:N`). |
 | Observation | One recorded step of the **target**, such as a model call or a tool call, with its input, output, and timing. Each observation belongs to exactly one **trace** and can be nested under another observation in the same trace. |
 
-Note: **Simulated turns** and **recorded turns** are counted from different evidence. METIS assumes they agree: each message the simulator sends produces exactly one trace in the **target**'s session, in the same order. If a target emits no trace, or several, for a message, the two counts differ. Simulation limits and progress use simulated turns; grading uses recorded turns.
+Note: **Simulated turns** and **recorded turns** are counted from different evidence. METIS assumes they agree: each message the simulator sends produces exactly one trace in the **target**'s session, in the same order. If a target emits no trace, or several, for a message, the two counts differ. Simulation limits and progress use simulated turns; grading uses recorded turns. An **Interview turn** counts a third thing: the user's answers in the wizard's Interview, which involve no target.
 
 Note: Artefact references in **traces** and **sessions** identify where the artefacts can be retrieved. They do not contain the artefacts themselves.
 

@@ -72,7 +72,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from metis.wizard.contracts.interview_state import InterviewContext, Turn
+    from metis.wizard.contracts.interview_state import (
+        InterviewContext,
+        InterviewMessage,
+    )
     from metis.wizard.domain.specification import Criterion, Specification
 
 ATTEMPTS = 3
@@ -506,7 +509,7 @@ class GatewayInterviewer:
     def clarify(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
         result, _ = self._ask(
@@ -525,7 +528,7 @@ class GatewayInterviewer:
     def draft_behaviours(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(

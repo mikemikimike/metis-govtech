@@ -40,7 +40,11 @@ from metis.wizard.contracts import (
     StepResult,
     Target,
 )
-from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
+from metis.wizard.contracts.interview_state import (
+    HISTORY_LIMIT,
+    InterviewMessage,
+    InterviewState,
+)
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.scripted import ScriptedInterviewer, ScriptedMatcher
@@ -301,7 +305,9 @@ def test_model_failure_preserves_state_and_diagnostics(error, code, retryable) -
     opening = _start()
     assert isinstance(opening, InterviewSuccess)
     full = _review_state(InterviewStep.PERSONAS)
-    full.history = [Turn(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)]
+    full.history = [
+        InterviewMessage(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)
+    ]
 
     for state, response in (
         (opening.state, ChatResponse(text="a policy tool")),
@@ -389,7 +395,9 @@ def test_documents_survive_turns_and_require_file_review() -> None:
     started = _start(interviewer=interviewer, documents=documents)
     assert isinstance(started, InterviewSuccess)
     state = InterviewState.model_validate_json(started.state.model_dump_json())
-    state.history = [Turn(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)]
+    state.history = [
+        InterviewMessage(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)
+    ]
     continued = _turn(
         state,
         ChatResponse(text="It answers policy questions."),

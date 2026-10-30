@@ -19,10 +19,10 @@ from metis.wizard.contracts import (
     FormField,
     FormRequest,
     InterviewContext,
+    InterviewMessage,
     Option,
     OptionId,
     Perspective,
-    Turn,
 )
 from metis.wizard.contracts.interview_state import InterviewState
 from metis.wizard.domain.permissions import InterviewStep
@@ -143,7 +143,9 @@ def test_history_is_bounded_to_the_model_context_limit() -> None:
         InterviewState(
             specification=research_assistant(),
             context=interview_context(),
-            history=[Turn(role="user", text=str(index)) for index in range(13)],
+            history=[
+                InterviewMessage(role="user", text=str(index)) for index in range(13)
+            ],
         )
 
 

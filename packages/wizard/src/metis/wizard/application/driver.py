@@ -56,7 +56,7 @@ from metis.wizard.domain.permissions import InterviewStep
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from metis.wizard.contracts.interview_state import Turn
+    from metis.wizard.contracts.interview_state import InterviewMessage
     from metis.wizard.domain.specification import (
         Behaviour,
         Criterion,
@@ -134,9 +134,9 @@ _CLARIFY_TARGET_PATHS = frozenset(
 )
 
 
-def _clarify_questions_asked(history: list[Turn]) -> int:
+def _clarify_questions_asked(history: list[InterviewMessage]) -> int:
     """Count only questions composed by the model, not the package opening line."""
-    count = sum(1 for turn in history if turn.role == "assistant")
+    count = sum(1 for message in history if message.role == "assistant")
     if history and history[0].role == "assistant":
         try:
             opening = config.opening_question()
@@ -191,7 +191,7 @@ class StepDriver:
         step = state.step
 
         if step is InterviewStep.CLARIFY:
-            # The package-owned opening line is an assistant turn for context, but it is not a
+            # The package-owned opening line is an assistant message for context, but it is not a
             # question composed by the model and must not consume the clarify budget.
             if not any(t.role == "user" for t in state.history):
                 return ChatRequest(prompt=config.opening_question())

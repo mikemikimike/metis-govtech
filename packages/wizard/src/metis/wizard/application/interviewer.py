@@ -12,7 +12,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.interview_state import InterviewContext, Turn
+    from metis.wizard.contracts.interview_state import (
+        InterviewContext,
+        InterviewMessage,
+    )
     from metis.wizard.contracts.output import (
         ClarifyResult,
         CriterionConfiguration,
@@ -50,7 +53,7 @@ class Interviewer(Protocol):
     def clarify(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
         """One open question, or done. The only step the model may end on its own."""
@@ -59,7 +62,7 @@ class Interviewer(Protocol):
     def draft_behaviours(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> StepResult:
         """Features and behaviours. No criteria yet."""

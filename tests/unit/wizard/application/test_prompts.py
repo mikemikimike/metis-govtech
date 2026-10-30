@@ -17,7 +17,7 @@ from metis.wizard.contracts import (
     Specification,
     Target,
 )
-from metis.wizard.contracts.interview_state import Perspective, Turn
+from metis.wizard.contracts.interview_state import InterviewMessage, Perspective
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import orca_handover, research_assistant
 
@@ -261,14 +261,14 @@ def test_clarify_progress_values_are_substituted_into_the_template(
     _install_document(monkeypatch, document)
 
     history = [
-        Turn(role="assistant", text=opening_question()),
-        Turn(role="user", text="The opening answer."),
-        Turn(role="assistant", text="Question one?"),
-        Turn(role="user", text="Answer one."),
-        Turn(role="assistant", text="Question two?"),
-        Turn(role="user", text="Answer two."),
-        Turn(role="assistant", text="Question three?"),
-        Turn(role="user", text="Answer three."),
+        InterviewMessage(role="assistant", text=opening_question()),
+        InterviewMessage(role="user", text="The opening answer."),
+        InterviewMessage(role="assistant", text="Question one?"),
+        InterviewMessage(role="user", text="Answer one."),
+        InterviewMessage(role="assistant", text="Question two?"),
+        InterviewMessage(role="user", text="Answer two."),
+        InterviewMessage(role="assistant", text="Question three?"),
+        InterviewMessage(role="user", text="Answer three."),
     ]
 
     assert prompts._clarify_progress(history) == (3, 5, 2)
@@ -277,10 +277,10 @@ def test_clarify_progress_values_are_substituted_into_the_template(
 
     at_cap = [
         *history,
-        Turn(role="assistant", text="Question four?"),
-        Turn(role="user", text="Answer four."),
-        Turn(role="assistant", text="Question five?"),
-        Turn(role="user", text="Answer five."),
+        InterviewMessage(role="assistant", text="Question four?"),
+        InterviewMessage(role="user", text="Answer four."),
+        InterviewMessage(role="assistant", text="Question five?"),
+        InterviewMessage(role="user", text="Answer five."),
     ]
     assert prompts._clarify_progress(at_cap) == (5, 5, 0)
 
@@ -318,7 +318,7 @@ def test_model_calls_receive_their_required_context(
         InterviewDocument(name="sample.csv"),
     ]
     # The current history need not contain the original opening message.
-    history = [Turn(role="user", text="RECENT_ANSWER_SENTINEL")]
+    history = [InterviewMessage(role="user", text="RECENT_ANSWER_SENTINEL")]
     if call in {"clarify", "behaviours"}:
         prompt = getattr(prompts, call)(specification, history, context=context)
     elif call.endswith("_chat"):

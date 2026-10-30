@@ -66,9 +66,9 @@ from metis.wizard.contracts.interview_state import (
     CapabilityConfidence,
     CapabilityEvidence,
     InterviewContext,
+    InterviewMessage,
     InterviewState,
     Perspective,
-    Turn,
 )
 from metis.wizard.contracts.output import (
     BehaviourDraft,
@@ -185,7 +185,7 @@ __all__ = [
     "StepResultPatch",
     "Feature",
     "FeatureDraft",
-    "Turn",
+    "InterviewMessage",
     "InterviewConnectionRequest",
     "InterviewEndRequest",
     "InterviewErrorCode",
