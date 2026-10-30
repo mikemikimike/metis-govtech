@@ -11,12 +11,11 @@ Install Python 3.11 or later, Git, Make, Node.js 22 or later, and
 
 ## 2. Install METIS
 
-METIS is in beta, and you install it from a tagged release. Clone the tag and run `make install`,
-which creates the virtual environment and installs the exact dependency versions that the beta
-was tested with:
+METIS is in beta. Clone the repository and run `make install`, which creates the virtual
+environment and installs the exact dependency versions in the lockfile:
 
 ```bash
-git clone --branch v1.0.0b1 https://github.com/govtech-responsibleai/metis.git
+git clone https://github.com/govtech-responsibleai/metis.git
 cd metis
 make install
 ```
@@ -31,16 +30,6 @@ uv run metis --help
   Plain <code>pip install</code> from the repository does not work, because the METIS packages
   depend on each other through a <code>uv</code> workspace that <code>pip</code> cannot resolve.
 </p>
-
-### Development install
-
-To contribute to METIS, clone the `next` branch instead of a tag and follow the same steps:
-
-```bash
-git clone --branch next https://github.com/govtech-responsibleai/metis.git
-cd metis
-make install
-```
 
 ## 3. Set up the `.env` file
 

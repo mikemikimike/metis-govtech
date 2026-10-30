@@ -15,7 +15,7 @@ const GITHUB_URL = 'https://github.com/govtech-responsibleai/metis';
 const DOCS_URL = 'https://govtech-responsibleai.github.io/metis/docs/';
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const FULL_NAME = 'Measurement and Evaluation of Trustworthy Intelligent Systems';
-const INSTALL_CMD = 'git clone --branch v1.0.0b1 https://github.com/govtech-responsibleai/metis.git && cd metis && make install';
+const INSTALL_CMD = 'git clone https://github.com/govtech-responsibleai/metis.git && cd metis && make install';
 const IC_WIZARD = 'https://img.icons8.com/?size=100&id=36868&format=png&color=9B7520';
 const IC_USER = 'https://img.icons8.com/?size=100&id=23264&format=png&color=5C6569';
 const IC_BOT_ROSE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=AB596A';

@@ -112,10 +112,10 @@ For the full specification see [docs/architecture.md](docs/architecture.md).
 
 ### Install
 
-Betas are installed from a git tag. Pin the tag so the code does not change under you:
+Clone the repository and run `make install`:
 
 ```bash
-git clone --branch v1.0.0b1 https://github.com/govtech-responsibleai/metis.git
+git clone https://github.com/govtech-responsibleai/metis.git
 cd metis
 make install
 ```
