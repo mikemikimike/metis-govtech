@@ -6,66 +6,89 @@ Install METIS and set up your model provider.
 
 ## 1. Install the tools
 
-Install Python 3.11 or later and Git.
+Install Python 3.11 or later, Git, Make, Node.js 22 or later, and
+[uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ## 2. Install METIS
 
-Create a virtual environment and install METIS from the GitHub repository:
+METIS is in beta, and you install it from a tagged release. Clone the tag and run `make install`,
+which creates the virtual environment and installs the exact dependency versions that the beta
+was tested with:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install "git+https://github.com/govtech-responsibleai/metis@main"
+git clone --branch v1.0.0b1 https://github.com/govtech-responsibleai/metis.git
+cd metis
+make install
 ```
-
-<p className="code-caption">
-  Draft. When <code>main</code> gets the beta tag, replace <code>@main</code> with that tag.
-</p>
 
 Check the installation:
 
 ```bash
-metis --help
+uv run metis --help
 ```
+
+<p className="code-caption">
+  Plain <code>pip install</code> from the repository does not work, because the METIS packages
+  depend on each other through a <code>uv</code> workspace that <code>pip</code> cannot resolve.
+</p>
 
 ### Development install
 
-To contribute to METIS, clone the repository and install it in development mode. You also need
-[uv](https://docs.astral.sh/uv/getting-started/installation/), Node.js 22 or later, and Make:
+To contribute to METIS, clone the `next` branch instead of a tag and follow the same steps:
 
 ```bash
 git clone --branch next https://github.com/govtech-responsibleai/metis.git
 cd metis
 make install
-uv run metis --help
 ```
 
 ## 3. Set up the `.env` file
 
-Create a `.env` file in the folder where you run METIS.
-Set the values for your model provider:
+Create a `.env` file in the folder where you run METIS. In the clone, copy the example file
+to the repository root:
+
+```bash
+cp .env.example .env
+```
+
+Then set the required values.
+
+### Required
+
+A model key, and the Langfuse that holds the traces of the application you test:
 
 ```dotenv
 OPENAI_API_KEY=your-model-provider-key
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_BASE_URL=https://your-langfuse
+```
+
+### Optional
+
+Everything else has a default. These are the settings you are most likely to change:
+
+```dotenv
+# Use a gateway or provider other than the default OpenAI endpoint.
 OPENAI_BASE_URL=https://your-provider/v1
+
+# Use one model for every role. Unset, the roles use gpt-6-luna.
+DEFAULT_MODEL=your-model
+
+# Or set the model of one role. It wins over DEFAULT_MODEL.
 INTERVIEW_MODEL=your-interview-model
 USER_AGENT_MODEL=your-simulation-model
 JUDGE_MODEL=your-grading-model
 ```
 
 Every METIS command reads this one file. A value that you export in the shell wins. Each model
-role can also have its own key and gateway. See `docs/guide/models.md` in the repository.
-
-In a clone, copy the example file to the repository root instead:
-
-```bash
-cp .env.example .env
-```
+role can also have its own key and gateway, and a few other settings exist, such as embeddings.
+See `docs/guide/models.md` and `.env.example` in the repository.
 
 ## 4. Install the browser tools (optional)
 
 For browser simulation with Playwright, install Chromium and its dependencies.
-In a clone, run:
+From the clone, run:
 
 ```bash
 make install-extras-playwright

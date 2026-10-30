@@ -123,6 +123,8 @@ temporary fields, abandoned approaches, and the sequence of feedback.
 - Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`
 - Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
+- Beta exception: while v1 is in beta, all packages share one version (`1.0.0bN`) and each beta gets
+  one suite tag `v1.0.0bN`; see "Beta releases" in [CONTRIBUTING.md](CONTRIBUTING.md)
 - Commit messages MUST use a Conventional Commit type and the package scope in parentheses:
   `feat(wizard): split prompt configuration ownership`. Use the affected package name as the
   scope (`core`, `library`, `engine`, `wizard`, or `insights`), not the `metis-` distribution

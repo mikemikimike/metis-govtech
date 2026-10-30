@@ -233,6 +233,14 @@ Key rules:
 - Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
 - Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
 
+### Beta releases
+
+While v1 is in beta, the rules above have one exception. Every package shares one PEP 440
+version (`1.0.0b1`, `1.0.0b2`, and so on), all `pyproject.toml` versions bump together and are
+re-locked with `uv lock`, and each beta gets one suite tag, `v1.0.0bN`, instead of one tag per
+package. The scoped `<package-name>/v<semver>` tags return for independent releases after v1.0.0.
+Betas promise no compatibility with each other.
+
 ### Release Make Target
 
 ```bash
