@@ -299,6 +299,32 @@ async def test_an_upload_is_typed_from_its_extension(
 
 
 @pytest.mark.asyncio
+async def test_a_non_text_multipart_value_is_refused_and_nothing_is_sent(
+    tmp_path: Path,
+) -> None:
+    runner, target = await _ready(tmp_path)
+
+    with pytest.raises(ToolRefused, match="multipart part 'file' must be text"):
+        await runner.http_request(
+            "POST",
+            "/upload",
+            multipart={"file": {"media_type": "text/markdown"}},  # type: ignore[dict-item]
+        )
+
+    assert target.uploads == []
+
+
+@pytest.mark.asyncio
+async def test_a_plain_text_multipart_value_is_still_sent(tmp_path: Path) -> None:
+    runner, target = await _ready(tmp_path)
+    runner.begin_action("Send ⟦notes⟧")
+
+    await runner.http_request("POST", "/upload", multipart={"note": "hello"})
+
+    assert b"hello" in target.uploads[-1]
+
+
+@pytest.mark.asyncio
 async def test_file_id_from_needs_exactly_one_held_file(tmp_path: Path) -> None:
     runner, _ = await _ready(tmp_path)
 
