@@ -28,9 +28,10 @@ make clean          # remove generated/cached files
 
 The browser client is a separate Node project. Run `make install-web` once, then use
 `make check-web` for non-mutating formatting, type checking, tests, and API-contract drift checks.
-Use `make build-web` for the production build. For local development, run
-`make run-api` and `make run-web` in two terminals. Set
-`METIS_API_ORIGIN` when the API is not on port 8001.
+Use `make build-web` for the production build. For local development, `make run-web` starts the
+API and the web dev server, with a label on each line of output. Ctrl-C stops them, and a server that
+stops on its own takes the other one with it. To start the API server only, run `make run-api`.
+Set `METIS_API_ORIGIN` when the API is not on port 8001.
 
 Individual targets: `lint`, `lint-fix`, `format`, `format-check`, `typecheck`.
 

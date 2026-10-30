@@ -28,6 +28,7 @@ Useful commands:
 ```bash
 npm install
 npm run dev          # use a separate `PORT=8001 uv run metis-api` process
+                     # `make run-web` at the repository root starts this server and the API
 npm run format:check
 npm run typecheck
 npm test

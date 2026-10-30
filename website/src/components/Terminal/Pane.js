@@ -39,7 +39,7 @@ function Line({text}) {
 export default function Pane({label, command}) {
   const text = command.trim();
   return (
-    <div className={styles.pane}>
+    <div>
       <div className={styles.header}>
         <span>{label}</span>
         <CopyButton text={text} />

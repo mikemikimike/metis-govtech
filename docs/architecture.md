@@ -285,7 +285,10 @@ configured grader paths, and validated arguments, including resolved defaults.
 Insights reads these recorded values without creating graders.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
-`npm --prefix apps/web run dev`.
+`npm --prefix apps/web run dev`. `make run-web` starts both through `scripts/run-dev.sh`, which labels
+each line of output and stops every server when one of them ends. The two processes stay
+independent: the script starts them and adds no layer between them, and `make run-api` starts
+the API alone.
 The Vite proxy uses `METIS_API_ORIGIN`, defaulting to `http://127.0.0.1:8001`.
 The opening web screen renders the complete ordered capability catalogue and sends the selected
 ids and confidence with the target description in one start request.

@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs generate-grader-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check check-env ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
+.PHONY: install-docs run-docs build-docs check-docs generate-grader-docs install-landing run-landing build-landing run-site build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check check-env ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
 
 help:
 	@printf "Available targets:\n"
@@ -16,10 +16,11 @@ help:
 	@printf "\n"
 	@printf "Run (development servers):\n"
 	@printf "  make run                  Show instructions for starting all services\n"
-	@printf "  make run-api              Start the API server on port 8001\n"
-	@printf "  make run-web              Start the web dev server\n"
-	@printf "  make run-docs             Start the docs on port 3000\n"
-	@printf "  make run-landing          Start the landing page on port 8443\n"
+	@printf "  make run-web              Start the API server and the web dev server together\n"
+	@printf "  make run-api              Start the API server on port 8001 only\n"
+	@printf "  make run-site             Start the landing page and the docs together\n"
+	@printf "  make run-docs             Start the docs on port 3000 only\n"
+	@printf "  make run-landing          Start the landing page on port 8443 only\n"
 	@printf "\n"
 	@printf "Code quality:\n"
 	@printf "  make lint              Run Ruff lint checks\n"
@@ -81,6 +82,14 @@ run-landing:
 build-landing:
 	pnpm --dir landing-page build
 
+# Both site servers, as build-site builds both. They run on separate ports, so the published
+# layout of /metis/ and /metis/docs/ is only visible in build-site output.
+# The landing page waits until the docs answer, so the landing-page address is the last line at startup.
+run-site:
+	@scripts/run-dev.sh \
+		"docs=npm --prefix website start" \
+		"landing=until curl -so /dev/null http://127.0.0.1:3000/metis/docs/; do sleep 0.5; done; pnpm --dir landing-page dev"
+
 # GitHub Pages serves the landing page at /metis/ and the docs at /metis/docs/.
 build-site: build-landing build-docs
 	rm -rf _site
@@ -97,15 +106,22 @@ install-extras-playwright:
 	uv run playwright install --with-deps chromium
 
 run:
-	@printf "Start each service in its own terminal:\n"
+	@printf "Start the API server and the web dev server:\n"
+	@printf "  make run-web    # API server on port 8001 and web dev server\n"
+	@printf "\n"
+	@printf "Or start the API server only:\n"
 	@printf "  make run-api    # API server on port 8001\n"
-	@printf "  make run-web    # Web dev server\n"
+
+# Each line of output carries its service label, Ctrl-C stops the servers, and a server that stops
+# on its own takes the other one with it. To start the API server only, use run-api.
+# The web server waits until the API answers, so the web address is the last line at startup.
+run-web:
+	@scripts/run-dev.sh \
+		"api=HOST=127.0.0.1 PORT=8001 uv run metis-api" \
+		"web=until curl -so /dev/null http://127.0.0.1:8001/; do sleep 0.5; done; npm --prefix apps/web run dev"
 
 run-api:
 	HOST=127.0.0.1 PORT=8001 uv run metis-api
-
-run-web:
-	cd apps/web && npm run dev
 
 format-check-web:
 	npm --prefix apps/web run format:check

@@ -13,13 +13,13 @@ In the guided interview, you describe your application and the Wizard drafts the
 <Tabs groupId="wizard-interface">
 <TabItem value="browser" label="Browser" default>
 
-The Wizard needs two terminals that run at the same time. In your editor, open a terminal in the
-repository folder and split it into two. Run one command in each:
+In your editor, open a terminal in the repository folder and start the Wizard:
 
-<SplitTerminal panes={[{command: 'make run-api'}, {command: 'make run-web'}]} />
+<Terminal command="make run-web" />
 
-Keep both terminals open. Open the address that Terminal 2 shows, for example
-`http://localhost:5173`. You see the opening screen:
+Each line of output starts with the name of its server, `api` or `web`. Keep the terminal open.
+Open the address that the `web` lines show, for example `http://localhost:5173`. You see the
+opening screen:
 
 ![The opening screen of the Wizard in the browser](./assets/wizard-opening.png)
 

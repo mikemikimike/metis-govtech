@@ -31,15 +31,18 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    make install-web
    ```
 
-4. Start the API server and the web development server in two terminals:
+4. Start the API server and the web development server:
 
    ```bash
-   # terminal 1
-   make run-api
-
-   # terminal 2
    make run-web
    ```
+
+   Each line of output starts with the name of its server, `api` or `web`. Open the address that
+   the `web` lines show, for example `http://localhost:5173`. Press Ctrl-C to stop the servers.
+   If one server stops on its own, the other one stops too, and the last line names the server
+   that stopped first.
+
+   To start the API server only, run `make run-api`.
 
 The API runs at `http://localhost:8001` by default. If the API uses another address, set
 `METIS_API_ORIGIN` before you start the web development server. The web development server
@@ -113,9 +116,9 @@ binding again. If the fields are not valid, Send marks them and does not start t
 the fields, or choose **Build Spec only**.
 
 The API reads your `.env` and reaches the target only when it runs on your computer
-(`make run-api` listens on `127.0.0.1`). An API that other people can reach checks the fields
-only, because it would fetch any URL that a user types. Then the card says "This server checks
-the fields only". An operator can set `METIS_API_CONNECTION_CHECK=1` or `0` to choose.
+(`make run-web` and `make run-api` listen on `127.0.0.1`). An API that other people can reach checks
+the fields only, because it would fetch any URL that a user types. Then the card says "This server
+checks the fields only". An operator can set `METIS_API_CONNECTION_CHECK=1` or `0` to choose.
 
 To add a binding to a finished Interview, select **Connect target** in the completed message. The
 next download includes the binding.
