@@ -18,6 +18,26 @@ def _find_repo_root() -> Path:
 
 REPO_ROOT = _find_repo_root()
 
+# Rich and Typer choose colour, layout, and line width from these. A CI runner and a developer
+# terminal set them differently, and the tests assert on plain text.
+_TERMINAL_VARIABLES = (
+    "FORCE_COLOR",
+    "GITHUB_ACTIONS",
+    "NO_COLOR",
+    "PY_COLORS",
+    "TTY_COMPATIBLE",
+    "TTY_INTERACTIVE",
+)
+
+
+@pytest.fixture(autouse=True)
+def plain_terminal(monkeypatch):
+    """Run every test in the same terminal, whatever the machine or the CI runner sets."""
+    for name in _TERMINAL_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("COLUMNS", "200")
+
 
 @pytest.fixture
 def repo_root() -> Path:

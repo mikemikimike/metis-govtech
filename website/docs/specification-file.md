@@ -39,7 +39,7 @@ This `specification.yaml` tests one Behaviour of the research assistant with two
 ```yaml
 schema_version: 1
 id: research-assistant
-runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
+runner_factory_ref: metis.engine.simulation.runners.http.HttpRunnerFactory
 target_binding: target-binding.yaml
 target:
   name: Policy research assistant
@@ -115,11 +115,10 @@ Your editor can use it to check the file as you type.
 
 | Your application | `runner_factory_ref` | `target_binding` |
 |---|---|---|
-| An HTTP API | `metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory` | Required |
-| A web page | `metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory` | Required |
+| An HTTP API | `metis.engine.simulation.runners.http.HttpRunnerFactory` | Required |
+| A web page | `metis.engine.simulation.runners.browser.BrowserRunnerFactory` | Required |
 
-When you do not connect a target, the Wizard writes
-`metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory`, the runner for the Orca API. To
+When `runner_factory_ref` is not set, it defaults to the HTTP runner. To
 write a runner for your own application, see the
 [engine guide](https://github.com/govtech-responsibleai/metis/blob/next/docs/guide/engine.md).
 

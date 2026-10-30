@@ -14,6 +14,7 @@ Thank you for contributing to METIS. This guide covers expectations and best pra
 - [Pull Requests](#pull-requests)
 - [Dependency Rules](#dependency-rules)
 - [Versioning & Release](#versioning--release)
+- [Support and contributions during the beta](#support-and-contributions-during-the-beta)
 - [Getting Help](#getting-help)
 
 ## Prerequisites
@@ -233,6 +234,14 @@ Key rules:
 - Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
 - Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
 
+### Beta releases
+
+While v1 is in beta, the rules above have one exception. Every package shares one PEP 440
+version (`1.0.0b1`, `1.0.0b2`, and so on), all `pyproject.toml` versions bump together and are
+re-locked with `uv lock`, and each beta gets one suite tag, `v1.0.0bN`, instead of one tag per
+package. The scoped `<package-name>/v<semver>` tags return for independent releases after v1.0.0.
+Betas promise no compatibility with each other.
+
 ### Release Make Target
 
 ```bash
@@ -241,10 +250,29 @@ make release-branch PKG=engine VER=0.2.1   # Create branch (release/metis-engine
 
 Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
 
+## Support and contributions during the beta
+
+Issues and pull requests are welcome. We handle them on a best-effort basis: we read them, but we
+do not promise response times, and a pull request may wait a while for review.
+
+The beta supports one path: the toy app, then Langfuse, then `metis wizard`, then
+`metis engine`, then `metis insights`. A bug that breaks this path is the first thing we fix, and
+it is the only kind of fix that we hold a beta for. Everything else is recorded as an issue and
+considered for a later beta. Anything outside the path is experimental, so a report or a pull
+request about it may be deferred.
+
+Before you open a pull request for a larger change, open an issue first and describe what you
+want to do. That saves you work if the change does not fit the path or conflicts with something in
+progress. Expect breaking changes between betas, because no compatibility is promised.
+
+Report a security problem privately, as [SECURITY.md](SECURITY.md) describes, and not in a public
+issue.
+
 ## Getting Help
 
 - Architecture questions → [docs/architecture.md](docs/architecture.md)
 - Build system → `make help`
 - CLI usage → `metis --help`
+- Support and what to expect → [Support and contributions during the beta](#support-and-contributions-during-the-beta)
 
 If something in this guide is unclear or outdated, open an issue or fix it directly — contributions to docs are contributions too.
