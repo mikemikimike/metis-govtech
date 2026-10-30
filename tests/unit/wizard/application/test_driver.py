@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pytest
 
 from metis.wizard.adapters.llm.gateway import ModelOutputError
-from metis.wizard.application import Turn
+from metis.wizard.application import InterviewMessage
 from metis.wizard.application.config import clarify_turn_cap, opening_question
 from metis.wizard.application.driver import DriverState as ApplicationDriverState
 from metis.wizard.application.driver import StepDriver
@@ -71,11 +71,11 @@ class NeverDone(ScriptedInterviewer):
         return ClarifyResult(message="One more thing?", done=False)
 
 
-def after_opening(*model_questions: str) -> list[Turn]:
+def after_opening(*model_questions: str) -> list[InterviewMessage]:
     return [
-        Turn(role="assistant", text=opening_question()),
-        Turn(role="user", text="It answers research questions."),
-        *(Turn(role="assistant", text=q) for q in model_questions),
+        InterviewMessage(role="assistant", text=opening_question()),
+        InterviewMessage(role="user", text="It answers research questions."),
+        *(InterviewMessage(role="assistant", text=q) for q in model_questions),
     ]
 
 
@@ -863,7 +863,9 @@ def test_every_visible_back_transition_restores_its_destination(
     state = driver_state(
         specification=specification,
         step=source,
-        history=[Turn(role="user", text="Keep everything I already decided.")],
+        history=[
+            InterviewMessage(role="user", text="Keep everything I already decided.")
+        ],
         step_messages={
             InterviewStep.BEHAVIOURS: "Review the behaviour draft.",
             InterviewStep.CRITERIA: "Review the acceptance criteria.",

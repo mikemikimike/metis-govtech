@@ -27,7 +27,7 @@ from metis.wizard.contracts.interview_state import (
 )
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.interview_state import Turn
+    from metis.wizard.contracts.interview_state import InterviewMessage
     from metis.wizard.domain.specification import Specification
 
 PROMPTS_FILE = "prompts.yaml"
@@ -240,7 +240,7 @@ def _specification(specification: Specification) -> str:
     return json.dumps(specification.model_dump(mode="json"), indent=2)
 
 
-def _transcript(history: list[Turn]) -> str:
+def _transcript(history: list[InterviewMessage]) -> str:
     return "\n".join(f"{t.role}: {t.text}" for t in history)
 
 
@@ -315,9 +315,9 @@ def _capability_evidence(context: InterviewContext | None) -> str:
     )
 
 
-def _clarify_progress(history: list[Turn]) -> tuple[int, int, int]:
+def _clarify_progress(history: list[InterviewMessage]) -> tuple[int, int, int]:
     """Return questions asked, the package cap, and questions remaining."""
-    asked = sum(1 for turn in history if turn.role == "assistant")
+    asked = sum(1 for message in history if message.role == "assistant")
     if (
         history
         and history[0].role == "assistant"
@@ -353,7 +353,7 @@ def _compose(
 
 def clarify(
     specification: Specification,
-    history: list[Turn],
+    history: list[InterviewMessage],
     context: InterviewContext | None = None,
 ) -> ModelPrompt:
     questions_asked, question_cap, questions_remaining = _clarify_progress(history)
@@ -375,7 +375,7 @@ def clarify(
 
 def behaviours(
     specification: Specification,
-    history: list[Turn],
+    history: list[InterviewMessage],
     context: InterviewContext | None = None,
 ) -> ModelPrompt:
     return _compose(

@@ -33,13 +33,18 @@ from metis.wizard.contracts.documents import (
 from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.specification import Specification
 
-# The most recent clarification turns kept for model context. Older turns are trimmed after each
+# The most recent clarification messages kept for model context. Older messages are trimmed after each
 # accepted operation: they are prose the model no longer needs, not a display transcript a door
 # must keep. A door that wants the full transcript keeps its own record outside this state.
 HISTORY_LIMIT = 12
 
 
-class Turn(BaseModel):
+class InterviewMessage(BaseModel):
+    """One message of the clarification history, from the user or the interviewer.
+
+    An Interview turn adds at most one user message and one assistant message.
+    """
+
     role: Literal["user", "assistant"]
     text: str
 
@@ -125,7 +130,9 @@ class InterviewState(BaseModel):
     # The final lock, set only by Continue on a ready Test Case screen or a successful finish. Any
     # accepted Specification mutation clears it, so an earlier approval can never sign off new content.
     confirmed: bool = False
-    history: list[Turn] = Field(default_factory=list, max_length=HISTORY_LIMIT)
+    history: list[InterviewMessage] = Field(
+        default_factory=list, max_length=HISTORY_LIMIT
+    )
     # The latest drafting or chat message for each review step. A screen shows it when the user
     # comes back to that step, in place of the neutral default prompt.
     step_messages: dict[InterviewStep, str] = Field(default_factory=dict)

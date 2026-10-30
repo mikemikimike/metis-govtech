@@ -11,7 +11,7 @@ import yaml
 
 from metis.wizard.application import config
 from metis.wizard.application.driver import DriverState, StepDriver
-from metis.wizard.contracts.interview_state import Perspective, Turn
+from metis.wizard.contracts.interview_state import InterviewMessage, Perspective
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
@@ -215,10 +215,10 @@ def test_a_limit_edit_affects_an_active_interview(
         context=interview_context(),
         step=InterviewStep.CLARIFY,
         history=[
-            Turn(role="assistant", text=config.opening_question()),
-            Turn(role="user", text="the first answer"),
-            Turn(role="assistant", text="question one"),
-            Turn(role="assistant", text="question two"),
+            InterviewMessage(role="assistant", text=config.opening_question()),
+            InterviewMessage(role="user", text="the first answer"),
+            InterviewMessage(role="assistant", text="question one"),
+            InterviewMessage(role="assistant", text="question two"),
         ],
     )
     driver = StepDriver(interviewer=ScriptedInterviewer(clarify_questions=5))

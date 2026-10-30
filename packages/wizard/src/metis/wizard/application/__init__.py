@@ -25,7 +25,7 @@ from metis.wizard.application.turn import (
     handle_interview,
     package_specification,
 )
-from metis.wizard.contracts.interview_state import InterviewState, Turn
+from metis.wizard.contracts.interview_state import InterviewMessage, InterviewState
 
 __all__ = [
     "DriverState",
@@ -34,7 +34,7 @@ __all__ = [
     "FixtureLibrary",
     "FixtureMetadata",
     "InterviewState",
-    "Turn",
+    "InterviewMessage",
     "compile_specification",
     "configure_interview_dependencies",
     "derive_stage",

@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from metis.wizard.application import Turn
+from metis.wizard.application import InterviewMessage
 from metis.wizard.application.config import clarify_turn_cap
 from metis.wizard.contracts import (
     ClarifyResult,
@@ -48,7 +48,7 @@ class ScriptedInterviewer:
     def clarify(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
         self.calls.append("clarify")
@@ -57,7 +57,11 @@ class ScriptedInterviewer:
             asked -= 1
         if asked >= self.clarify_questions:
             latest_answer = next(
-                (turn.text for turn in reversed(history) if turn.role == "user"),
+                (
+                    message.text
+                    for message in reversed(history)
+                    if message.role == "user"
+                ),
                 "",
             )
             patches = []
@@ -107,7 +111,7 @@ class ScriptedInterviewer:
     def draft_behaviours(
         self,
         specification: Specification,
-        history: list[Turn],
+        history: list[InterviewMessage],
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_behaviours")

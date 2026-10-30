@@ -63,8 +63,8 @@ from metis.wizard.contracts.interview_state import (
     HISTORY_LIMIT,
     CapabilityEvidence,
     InterviewContext,
+    InterviewMessage,
     InterviewState,
-    Turn,
 )
 from metis.wizard.contracts.turn import (
     CompileResult,
@@ -240,9 +240,13 @@ def handle_interview(
 
     try:
         if isinstance(request.response, ChatResponse):
-            working.history.append(Turn(role="user", text=request.response.text))
+            working.history.append(
+                InterviewMessage(role="user", text=request.response.text)
+            )
         if isinstance(request.response, ChoiceResponse) and request.response.feedback:
-            working.history.append(Turn(role="user", text=request.response.feedback))
+            working.history.append(
+                InterviewMessage(role="user", text=request.response.feedback)
+            )
         # Bound the history now. A failure below projects this working state as its
         # diagnostic, and the state model refuses a history longer than the limit.
         working.history = working.history[-HISTORY_LIMIT:]
@@ -299,7 +303,7 @@ def _start(
                 documents=request.documents,
                 connection=request.connection,
             ),
-            history=[Turn(role="user", text=request.description)],
+            history=[InterviewMessage(role="user", text=request.description)],
             issued_ids=collect_specification_ids(specification),
         ),
         InterviewStep.CLARIFY,
@@ -698,13 +702,15 @@ def _stamp(working: DriverState) -> None:
 
 
 def _record_assistant(working: DriverState) -> None:
-    """Record a composed clarification question as an assistant turn, and bound the history.
+    """Record a composed clarification question as an assistant message, and bound the history.
 
-    Only chat turns are kept: the history exists for clarification context, and the review screens
+    Only chat messages are kept: the history exists for clarification context, and the review screens
     are not conversation. Bounding here keeps the wire payload small.
     """
     if isinstance(working.pending, ChatRequest):
-        working.history.append(Turn(role="assistant", text=working.pending.prompt))
+        working.history.append(
+            InterviewMessage(role="assistant", text=working.pending.prompt)
+        )
     working.history = working.history[-HISTORY_LIMIT:]
 
 

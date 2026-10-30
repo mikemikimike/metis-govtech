@@ -157,7 +157,7 @@ export type Specification = Omit<
   scenarios: Scenario[];
   tasks: Task[];
 };
-export type Turn = Schema["Turn"];
+export type InterviewMessage = Schema["InterviewMessage"];
 export type InterviewState = RequiredFields<
   Omit<Schema["InterviewState-Input"], "specification" | "pending">,
   "history" | "user_typed" | "issued_ids"
