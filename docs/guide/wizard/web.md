@@ -289,8 +289,9 @@ Editor rules:
 - Each Scenario needs at least one test case.
 - The grader list groups the graders by dimension, such as Task and Output Quality or
   Interaction Quality. Graders with no dimension are in the Other group.
-- Each grader shows its taxonomy as chips: its grader types, scopes, reference types, and
-  judgment forms. Each of these fields has one colour. Hover over a chip to see its field.
+- Each grader shows chips for the values that it declares: its grader types, scopes,
+  reference types, and judgment forms. Each of these fields has one colour. Hover over a
+  chip to see its field.
 - The grader search finds text in the name, the description, the dimension, the measure,
   and each chip. For example, search for "session" to find the graders
   that judge a full session.

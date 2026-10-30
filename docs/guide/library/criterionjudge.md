@@ -7,7 +7,7 @@ offer this judge, because the form has no criterion description field.
 
 ## Taxonomy declaration
 
-The Criterion Judge is the LLM reference grader for the taxonomy foundation.
+The Criterion Judge is the model-based reference grader for the taxonomy foundation.
 [DemoTraceBudget](graders.md#examples-to-copy) is the deterministic reference grader.
 Criterion Judge is a catch-all judge with `measure=None`. It has no category mapping.
 The other five groups have one fixed value:
@@ -109,7 +109,7 @@ message, each agent's system prompt the first time it appears, what each model c
 each tool call with its arguments, its status and its full result, the assistant's reply, and
 each error that the target reported. METIS makes this transcript with
 `render_session(turns, tool_results=True)` from `metis.core.trace_processing`, so the
-judge sees the same view as the other LLM graders.
+judge sees the same view as the other model-based graders.
 
 The judge does not see trace metadata or timing fields. It does not read artifact
 files, so a file path or a recorded claim about a file does not show what the file contains.

@@ -31,7 +31,7 @@ const RestartIcon = () => (
 /* ── Data ── */
 const steps = [
   { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours, and measurable criteria.' },
-  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn expected behaviours into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader.' },
+  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn expected behaviours into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. Each criterion is matched to the grader that measures it.' },
   { number: '03', label: 'EXECUTE', product: 'Engine', title: 'Test the full trajectory.', text: 'The Engine runs adaptive, multi-turn conversations through your API or a real browser, scoring every step, tool call, and recovery.' },
   { number: '04', label: 'IMPROVE', product: 'Insights', title: 'Know exactly what to fix.', text: 'Insights rolls scores up through your specification, so you see how behaviours perform across personas, scenarios, and trials.' },
 ];

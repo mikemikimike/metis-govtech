@@ -35,26 +35,15 @@ Note: **Expected Behaviour** corresponds to the `Behaviour` data models.
 
 ## Scope
 
-Scope is one of the three top-level taxonomy groups, with Measure and Mechanism.
-It describes the evidence unit to assess. Choose one subdimension, then one
-attribute within it.
-
-| Subdimension | Attributes |
-|--------------|------------|
-| Atomic | Model decision generation, model reasoning, artefact, tool selection, tool arguments, tool execution, environment action. |
-| Interaction | Trace, subsession, session. |
-
-The `Scope` enum defines these attributes. `GraderTaxonomy.scopes` lists the values
-that a grader supports. The grader's configuration selects a supported value when
-several values are available. See the [grader taxonomy guide](docs/guide/library/graders.md).
+Scope is the evidence unit that one assessment is about. The `Scope` enum defines the
+units. Each grader declares the scopes that it supports, and its configuration selects
+one when several are available. See the [grader guide](docs/guide/library/graders.md)
+for every value that a grader declares.
 
 Graders assess recorded evidence. The current result model has no structured field
 that identifies a scope item.
 
-### Evidence records
-
 The following terms describe the records that supply evidence for a scope.
-They are listed from largest to smallest.
 
 | Term | Definition |
 |------|------------|
@@ -90,7 +79,18 @@ A **grader** is one of two kinds:
   - slide count equals the requested number
   - font size at least the minimum
   - response is valid JSON
-- **Model-based grader** — a language model judges the **trace** against the **criterion**. Best when the criterion needs judgement.
+- **Model-based grader** — a model judges the **trace** against the **criterion**. Best when the criterion needs judgement.
   - output tone
   - instruction following
   - summary faithful to the source
+
+These two kinds group the **grader type** values. Each grader declares the values that it
+supports (see `GraderType`, and the [grader guide](docs/guide/library/graders.md)):
+
+| Kind | Grader type values |
+|---|---|
+| Code-based | `deterministic`, `statistical_metric` |
+| Model-based | `llm`, `learned_discriminative_model`, `embedding_similarity` |
+
+A `hybrid` grader uses both kinds. `human` grading is out of scope in v1, because it needs a
+live human-review workflow.

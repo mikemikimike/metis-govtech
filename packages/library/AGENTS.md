@@ -14,7 +14,7 @@ Shared catalog of metrics, skills, and reusable components consumed by both the 
   session in a grader. If a grader needs a new view, add it to the trace processor, with
   tests in `tests/unit/core/`. See the "Reading traces" section of
   `docs/guide/library/graders.md`.
-- An LLM grader subclasses `Grader[Args]`. Its `grade()` selects what to judge with
+- A model-based grader subclasses `Grader[Args]`. Its `grade()` selects what to judge with
   `SCOPE_DEFINITIONS[self.scope].select(...)`, renders each selected piece with the scope's
   `render`, and calls `metis.library.judge.judge` for each one. The definitions live in `metis.library.scope`, `metis.library.judgment_form`, and
   `metis.library.aggregation`. Add a definition there when a grader needs a new value.

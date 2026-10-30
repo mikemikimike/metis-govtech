@@ -31,7 +31,7 @@ Each grader is one module in `metis/library/graders/<sub-dimension>/`. It has th
 example of all three:
 
 1. **An arguments model.** It validates `grader_args`. Every grader gets `threshold` from
-   `GraderArgs`. An LLM grader extends `JudgeArgs`, which adds `model` and
+   `GraderArgs`. A model-based grader extends `JudgeArgs`, which adds `model` and
    `max_input_tokens`. It also inherits the settings
    class for each scope that it supports, such as `TraceArgs` (see [Scopes](#scopes)).
    Unknown keys fail validation before the run starts.
@@ -40,7 +40,7 @@ example of all three:
 3. **`criteria()` and `grade()`.** `criteria()` returns the rubric text that the judge reads.
    `grade()` selects what to judge and calls the judge once for each selected piece.
 
-Most LLM graders use this `grade()` without changes:
+Most model-based graders use this `grade()` without changes:
 
 ```python
 async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:

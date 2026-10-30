@@ -1,4 +1,4 @@
-"""The judge call that every LLM grader makes: one rendered piece of a session in, one result out.
+"""The judge call that every model-based grader makes: one rendered piece of a session in, one result out.
 
 ``judge`` builds the prompt from the grader's criteria and the shared definitions of its scope
 and judgment form, and returns the judge's assessment as a ``GraderResult``. A grader that checks

@@ -33,7 +33,7 @@ class DemoRequiredToolArgs(GraderArgs):
 class DemoRequiredToolGrader(Grader[DemoRequiredToolArgs]):
     """Demo: the target made a ``tool_name`` call at least once.
 
-    Shows a code grader: it declares a taxonomy and selects the session like an LLM grader,
+    Shows a code-based grader: it declares a taxonomy and selects the session like a model-based one,
     then checks the tool calls itself with no judge call. Every ``TOOL`` observation counts, at
     any depth, so a call a sub-agent made several levels down still counts. Scores 1.0 if found,
     else 0.0. Errors on a session with no recorded turns.

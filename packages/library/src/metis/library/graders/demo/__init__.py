@@ -1,8 +1,8 @@
 """metis.library.graders.demo: example graders built on the shared trace processor (#431).
 
 They show grader authors the full pattern on a real captured session: a taxonomy, the scope's
-select and render functions, and ``metis.library.judge.judge`` for an LLM grader. Two are LLM
-graders (session and subsession scope) and two are code graders. They are not a catalogue: this sub-package
+select and render functions, and ``metis.library.judge.judge`` for a model-based grader. Two are
+model-based graders (session and subsession scope) and two are code-based. They are not a catalogue: this sub-package
 is not re-exported from ``metis.library.graders``, so the wizard never offers them. A
 criterion can still name one by its full path, e.g.
 ``metis.library.graders.demo.DemoTraceBudgetGrader``.
