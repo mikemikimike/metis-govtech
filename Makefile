@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs generate-grader-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
+.PHONY: install-docs run-docs build-docs check-docs generate-grader-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check check-env ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
 
 help:
 	@printf "Available targets:\n"
@@ -29,6 +29,7 @@ help:
 	@printf "  make fix               Apply lint autofixes and format\n"
 	@printf "  make typecheck         Run Pyright type checking\n"
 	@printf "  make check             Run lint + format-check + typecheck (non-mutating)\n"
+	@printf "  make check-env         Check .env keys and connectivity (metis doctor)\n"
 	@printf "  make test              Run all tests\n"
 	@printf "  make test-unit         Run unit tests only\n"
 	@printf "  make ci                Full CI suite: check + web checks + test\n"
@@ -155,6 +156,9 @@ check:
 	$(MAKE) lint
 	$(MAKE) format-check
 	$(MAKE) typecheck
+
+check-env:
+	uv run metis doctor
 
 ci:
 	$(MAKE) check
