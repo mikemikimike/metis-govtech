@@ -36,6 +36,7 @@ _GROUPS = {
     "task_and_output_quality": "Task and Output Quality",
     "execution_and_decision_quality": "Execution and Decision Quality",
     "reliability_and_robustness": "Reliability and Robustness",
+    "resource_use": "Resource Use",
     "interaction_quality": "Interaction Quality",
 }
 _FALLBACK_GROUP = "Fallback judge"
@@ -110,14 +111,19 @@ def _fields_only(cls: type) -> str:
 
 
 def _prompt(grader: type[Grader[Any]]) -> str:
-    """The grader's class header, its ``criteria()`` method, and the helpers that it calls."""
+    """The grader's class header, its ``criteria()`` method, and the helpers that it calls.
+
+    Deterministic graders have no ``criteria()``; for those the ``grade()`` method is shown
+    instead.
+    """
     source = inspect.getsource(grader)
     node = ast.parse(textwrap.dedent(source)).body[0]
     assert isinstance(node, ast.ClassDef)
     header = textwrap.dedent(source).splitlines()[
         node.lineno - 1 : node.body[0].lineno - 1
     ]
-    methods, pending = [], ["criteria"]
+    entry = "criteria" if hasattr(grader, "criteria") else "grade"
+    methods, pending = [], [entry]
     while pending:
         name = pending.pop(0)
         if name in methods:

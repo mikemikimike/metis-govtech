@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_FIELDS = "core,basic,io,metadata"
+_FIELDS = "core,basic,io,metadata,usage,model"
 _PAGE_SIZE = 1000
 _TRUNCATION_LIMIT = 200
 """Langfuse truncates metadata values longer than this unless the key is expanded."""

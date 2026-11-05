@@ -16,6 +16,12 @@ The recorded turns: messages, calls, reply    ``turns(input.traces)``
 The files the target produced                 ``find_artifacts(input, name)``
 The files the user gave the target            ``find_fixtures(input)``
 The tools each agent had                      ``tools_offered(input.traces)``
+The model-call count                          ``generation_count(input.traces)``
+The tool-call count                           ``tool_call_count(input.traces)``
+The wall-clock seconds                        ``session_elapsed_seconds(input.traces)``
+The execution-step count                      ``execution_step_count(input.traces)``
+The token counts                              ``token_usage(input.traces)``
+The session cost                              ``session_cost(input.traces)``
 **2. Select what to judge**
 Each recorded turn on its own (trace scope)   ``select_by_turn(turns, last_only=...)``
 A recorded turn and those before it           ``select_by_window(turns, size, last_only=...)``
@@ -315,6 +321,121 @@ def tools_offered(traces: Sequence[Trace]) -> tuple[OfferedTool, ...]:
             for rank, tool in _tools_recorded(observation, by_id):
                 found.setdefault((tool.agent, tool.name), []).append((rank, tool))
     return tuple(_merged(entries) for entries in found.values())
+
+
+def generation_count(traces: Sequence[Trace]) -> int:
+    """The number of model calls in the session: every ``GENERATION`` observation across all
+    traces, including retries and failed attempts. ``0`` when the traces have none."""
+    return sum(
+        1
+        for trace in traces
+        for observation in trace.observations
+        if observation.type == "GENERATION"
+    )
+
+
+def tool_call_count(traces: Sequence[Trace]) -> int:
+    """The number of tool calls in the session: every ``TOOL`` observation across all traces,
+    including failed calls, retries, and batched operations. ``0`` when the traces have none."""
+    return sum(
+        1
+        for trace in traces
+        for observation in trace.observations
+        if observation.type == "TOOL"
+    )
+
+
+def session_elapsed_seconds(traces: Sequence[Trace]) -> float | Problem:
+    """Wall-clock seconds from the first root's ``start_time`` to the last root's ``end_time``.
+
+    Traces are assumed to be in chronological order. A ``Problem`` when either timestamp is
+    missing or when there are no traces.
+    """
+    if not traces:
+        return Problem(kind="missing", detail="The session has no traces.")
+    first_start = traces[0].root.start_time
+    last_end = traces[-1].root.end_time
+    if first_start is None:
+        return Problem(kind="missing", detail="The first trace has no start time.")
+    if last_end is None:
+        return Problem(kind="missing", detail="The last trace has no end time.")
+    return (last_end - first_start).total_seconds()
+
+
+_STEP_TYPES = frozenset({"GENERATION", "TOOL", "AGENT"})
+
+
+def execution_step_count(traces: Sequence[Trace]) -> int:
+    """The number of execution steps in the session: each non-root observation of type
+    ``GENERATION``, ``TOOL``, or ``AGENT``. ``SPAN`` observations are structural grouping and
+    excluded. The root observation of each trace is the turn envelope and excluded.
+    ``0`` when the traces have none."""
+    return sum(
+        1
+        for trace in traces
+        for observation in trace.observations
+        if observation.id != trace.root.id and observation.type in _STEP_TYPES
+    )
+
+
+def token_usage(traces: Sequence[Trace]) -> dict[str, int] | Problem:
+    """Total token counts across all ``GENERATION`` observations that carry usage data.
+
+    Reads ``usageDetails`` from each observation's raw API data and sums every key it finds.
+    Returns a dict such as ``{"input": N, "output": N, "total": N}`` with the keys the trace
+    source recorded. A ``Problem`` when no observation carries usage data.
+    """
+    totals: dict[str, int] = {}
+    for trace in traces:
+        for observation in trace.observations:
+            if observation.type != "GENERATION":
+                continue
+            details = observation.raw.get("usageDetails")
+            if not isinstance(details, dict):
+                continue
+            for key, value in details.items():
+                if isinstance(value, int):
+                    totals[key] = totals.get(key, 0) + value
+    if not totals:
+        return Problem(
+            kind="missing",
+            detail="No observation carries token usage data. The trace source may not "
+            "record usage, or the extractor may not fetch the usage field group.",
+        )
+    return totals
+
+
+def session_cost(traces: Sequence[Trace]) -> float | Problem:
+    """Total monetary cost across all ``GENERATION`` observations that carry cost data, in USD.
+
+    Reads ``costDetails.total`` from each observation's raw API data, falling back to
+    ``calculatedTotalCost`` when ``costDetails`` is absent. A ``Problem`` when no observation
+    carries cost data.
+    """
+    total = 0.0
+    found = False
+    for trace in traces:
+        for observation in trace.observations:
+            if observation.type != "GENERATION":
+                continue
+            cost_details = observation.raw.get("costDetails")
+            if isinstance(cost_details, dict):
+                value = cost_details.get("total")
+                if isinstance(value, (int, float)):
+                    total += value
+                    found = True
+                    continue
+            calculated = observation.raw.get("calculatedTotalCost")
+            if isinstance(calculated, (int, float)):
+                total += calculated
+                found = True
+    if not found:
+        return Problem(
+            kind="missing",
+            detail="No observation carries cost data. The trace source may not record "
+            "costs, or the extractor may not fetch the usage field group.",
+        )
+    return total
 
 
 # ---------------------------------------------------------------------------

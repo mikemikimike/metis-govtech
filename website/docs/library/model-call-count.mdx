@@ -1,0 +1,46 @@
+---
+title: "Model call count"
+description: "The session stayed within the allowed number of model calls."
+---
+
+{/* Generated from packages/library/src/metis/library/graders/resource_use/_model_call_count.py by make generate-grader-docs. Do not edit. */}
+
+import {GraderCode, GraderTags} from '@site/src/components/Graders';
+
+<GraderTags name="ModelCallCountGrader" />
+
+The session stayed within the allowed number of model calls.
+
+<GraderCode>
+
+```python
+class ModelCallCountArgs(GraderArgs):
+    max_calls: int = Field(
+        ge=1,
+        strict=True,
+        description="Maximum number of model calls allowed in the session.",
+    )
+    """The most model calls the session may make and still pass."""
+
+
+class ModelCallCountGrader(Grader[ModelCallCountArgs]):
+    async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
+        selected = SCOPE_DEFINITIONS[self.scope].select(input, self.args)
+        if isinstance(selected, Problem):
+            return GradingOutput.errored("The session has no traces to count.")
+        count = generation_count(input.traces)
+        budget = self.args.max_calls
+        return GradingOutput(
+            results=[
+                GraderResult(
+                    status="scored",
+                    score=1.0 if count <= budget else 0.0,
+                    reason=f"The session made {count} model call(s) against a budget "
+                    f"of {budget}.",
+                    scope="session",
+                )
+            ]
+        )
+```
+
+</GraderCode>

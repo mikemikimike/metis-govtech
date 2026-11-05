@@ -116,7 +116,7 @@ class TestPaging:
         lf.api.observations_v_2.get_many.return_value = _page([])
         _page_through_observations(lf, "sessionId", "s1")
         kwargs = lf.api.observations_v_2.get_many.call_args.kwargs
-        assert kwargs["fields"] == "core,basic,io,metadata"
+        assert kwargs["fields"] == "core,basic,io,metadata,usage,model"
         assert kwargs["limit"] == 1000
         assert _filter(kwargs) == ("sessionId", "s1")
         assert kwargs["expand_metadata"] is None
